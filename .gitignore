@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Manual Web runtime data (SQLite, markdown docs, uploads)
+backend/data/

@@ -1,0 +1,43 @@
+# Agent Gate — Cursor Behavior Rules
+# 이 파일을 프로젝트 루트에 `.cursorrules` 로 복사하세요.
+
+## 🔒 파일 수정 규칙 (필수)
+
+Before editing any file, you MUST call the `claim_scope` tool with:
+- `workspace_id`: from `.agent-gate/workspace.toml` `[workspace].id` (required)
+- `agent`: "cursor"
+- `files`: list of files you plan to modify (use globs like `src/**/*.py` if needed)
+- `branch`: current git branch (if available)
+- `reason`: brief description of what you're about to do
+
+If `claim_scope` returns a conflict:
+1. STOP editing immediately
+2. Read the conflicting agent's scope details
+3. Either wait, ask the user to coordinate, or switch to non-conflicting files
+4. NEVER overwrite another agent's active work
+
+After completing your edits, you MUST call `release_scope` to free the claimed files.
+
+## 🚦 빌드 / 테스트 규칙 (필수)
+
+Before running any build, test, or lint command that touches the codebase:
+1. Call `check_build_safety` with the files/regions the command will affect
+2. If blocked, ask the user before proceeding
+3. If safe, proceed normally
+
+## 🧠 상황 인식 & 팀 피드
+
+- If `.cursor/hooks.json` is installed, session start already injects team feed — still call `get_team_activity` when in doubt
+- Call `get_team_activity` or `get_workspace_status` at session start — see who is working/planned and recent history
+- Before starting non-trivial work, call `announce_plan` with a one-line message and rough `files` paths
+- On `claim_scope`, always set `reason` (becomes the working message for others)
+- On `release_scope`, set `note` with what you finished (shows in team history)
+- Optional: `post_activity_note` for mid-task updates without claiming files
+- If you see stale scopes (>30min old), mention them to the user — they might be abandoned
+- Always prefer claiming narrower scopes over broad globs to reduce contention
+
+## 💬 메시지 스타일
+
+When reporting conflicts or build blocks, be concise but actionable:
+- Bad: "There is a conflict."
+- Good: "🚫 Build blocked — `kimi` is editing `src/auth.py` (scope `a3f7d2e1`). Wait or coordinate?"

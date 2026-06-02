@@ -1,0 +1,5 @@
+﻿# Agent Gate workspace identity (like .git for coordination scope)
+
+[workspace]
+id = "manual-web"
+name = "manual-web"
