@@ -1,8 +1,14 @@
+import shutil
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate
 from app.services.bootstrap_service import bootstrap_product
+
+settings = get_settings()
 
 
 def get_products(db: Session, skip: int = 0, limit: int = 100):
@@ -42,6 +48,13 @@ def update_product(db: Session, db_obj: Product, obj_in: ProductUpdate):
 
 
 def delete_product(db: Session, db_obj: Product):
+    docs_dir = Path(settings.DOCS_DIR) / db_obj.slug
+    uploads_dir = Path(settings.UPLOAD_DIR) / db_obj.slug
+    if docs_dir.exists():
+        shutil.rmtree(docs_dir)
+    if uploads_dir.exists():
+        shutil.rmtree(uploads_dir)
+
     db.delete(db_obj)
     db.commit()
     return db_obj

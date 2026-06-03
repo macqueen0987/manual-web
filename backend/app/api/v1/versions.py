@@ -46,7 +46,10 @@ def create_version(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Version with this slug already exists for this product",
         )
-    return version_service.create_version(db, request)
+    try:
+        return version_service.create_version(db, request, product.slug)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/products/{product_slug}/versions/publish", response_model=VersionOut)

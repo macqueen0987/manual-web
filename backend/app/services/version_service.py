@@ -25,6 +25,9 @@ def get_versions(db: Session, product_id: int, skip: int = 0, limit: int = 100):
 
 
 def get_version_by_slug(db: Session, product_id: int, slug: str):
+    """Resolve version by slug; ``latest`` maps to the row with ``is_latest=True``."""
+    if slug == "latest":
+        return get_latest_version(db, product_id)
     return db.query(Version).filter(Version.product_id == product_id, Version.slug == slug).first()
 
 
@@ -40,28 +43,14 @@ def get_version(db: Session, version_id: int):
     return db.query(Version).filter(Version.id == version_id).first()
 
 
-def create_version(db: Session, obj_in: VersionCreate):
-    db_obj = Version(
-        product_id=obj_in.product_id,
-        name=obj_in.name,
-        slug=obj_in.slug,
-        base_version_id=obj_in.base_version_id,
-        is_latest=False,
-        is_published=False,
-    )
-    db.add(db_obj)
-    db.commit()
-    db.refresh(db_obj)
-    return db_obj
-
-
-def _clone_documents_to_snapshot(
+def clone_documents_between_versions(
     db: Session,
     source_version_id: int,
     target_version_id: int,
     product_slug: str,
-    snapshot_slug: str,
-):
+    from_slug: str,
+    to_slug: str,
+) -> None:
     docs = db.query(Document).filter(Document.version_id == source_version_id).all()
     id_map: dict[int, int] = {}
     remaining = list(docs)
@@ -72,9 +61,7 @@ def _clone_documents_to_snapshot(
             if doc.parent_id is not None and doc.parent_id not in id_map:
                 continue
 
-            new_path = remap_version_in_path(
-                doc.file_path, product_slug, "latest", snapshot_slug
-            )
+            new_path = remap_version_in_path(doc.file_path, product_slug, from_slug, to_slug)
 
             new_doc = Document(
                 version_id=target_version_id,
@@ -94,6 +81,51 @@ def _clone_documents_to_snapshot(
             raise ValueError("Circular or broken document parent references")
 
     db.commit()
+
+
+def create_version(db: Session, obj_in: VersionCreate, product_slug: str):
+    if obj_in.slug == "latest":
+        raise ValueError("Cannot create a version with slug 'latest'")
+
+    if obj_in.base_version_id:
+        source = get_version(db, obj_in.base_version_id)
+        if not source or source.product_id != obj_in.product_id:
+            raise ValueError("Base version not found for this product")
+        source_slug = "latest" if source.is_latest else source.slug
+    else:
+        source = get_latest_version(db, obj_in.product_id)
+        if not source:
+            raise ValueError("No latest version found")
+        source_slug = "latest"
+
+    source_dir = Path(settings.DOCS_DIR) / product_slug / source_slug
+    target_dir = Path(settings.DOCS_DIR) / product_slug / obj_in.slug
+
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
+    if source_dir.exists():
+        shutil.copytree(source_dir, target_dir)
+    else:
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+    db_obj = Version(
+        product_id=obj_in.product_id,
+        name=obj_in.name,
+        slug=obj_in.slug,
+        base_version_id=source.id,
+        is_latest=False,
+        is_published=False,
+        snapshot_path=str(target_dir),
+    )
+    db.add(db_obj)
+    db.commit()
+    db.refresh(db_obj)
+
+    clone_documents_between_versions(
+        db, source.id, db_obj.id, product_slug, source_slug, obj_in.slug
+    )
+    db.refresh(db_obj)
+    return db_obj
 
 
 def publish_latest(db: Session, product_id: int, product_slug: str, obj_in: VersionPublish):
@@ -130,7 +162,9 @@ def publish_latest(db: Session, product_id: int, product_slug: str, obj_in: Vers
     db.commit()
     db.refresh(published)
 
-    _clone_documents_to_snapshot(db, latest.id, published.id, product_slug, obj_in.slug)
+    clone_documents_between_versions(
+        db, latest.id, published.id, product_slug, "latest", obj_in.slug
+    )
     db.refresh(published)
     return published
 
@@ -144,7 +178,8 @@ def delete_version(db: Session, db_obj: Version, product_slug: str):
         if snapshot_dir.exists():
             shutil.rmtree(snapshot_dir)
     version_dir = Path(settings.DOCS_DIR) / product_slug / db_obj.slug
-    if version_dir.exists() and version_dir != Path(settings.DOCS_DIR) / product_slug / "latest":
+    latest_dir = Path(settings.DOCS_DIR) / product_slug / "latest"
+    if version_dir.exists() and version_dir.resolve() != latest_dir.resolve():
         shutil.rmtree(version_dir)
 
     db.delete(db_obj)

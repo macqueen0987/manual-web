@@ -9,10 +9,25 @@ class DocumentBase(BaseModel):
     sort_order: int = 0
 
 
-class DocumentCreate(DocumentBase):
+class DocumentCreate(BaseModel):
     version_id: int
+    title: str = Field(..., min_length=1, max_length=255)
+    slug: str | None = Field(
+        None,
+        min_length=1,
+        max_length=255,
+        pattern=r"^[a-zA-Z0-9._-]+$",
+        description="Omit to auto-generate from title",
+    )
+    sort_order: int | None = None
     parent_id: int | None = None
     content: str = ""
+    locale: str | None = None
+
+
+class DocumentReposition(BaseModel):
+    parent_id: int | None = None
+    sort_order: int = Field(..., ge=0)
 
 
 class DocumentUpdate(BaseModel):
@@ -20,6 +35,7 @@ class DocumentUpdate(BaseModel):
     content: str | None = None
     sort_order: int | None = None
     parent_id: int | None = None
+    locale: str | None = None
 
 
 class DocumentOut(DocumentBase):

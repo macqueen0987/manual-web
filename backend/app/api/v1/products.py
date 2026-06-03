@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin_user, get_current_user
+from app.api.deps import get_current_admin_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.product import ProductCreate, ProductOut, ProductUpdate
-from app.services import product_service
+from app.schemas.version import VersionOut
+from app.services import product_service, version_service
 
 router = APIRouter()
 
@@ -17,6 +18,21 @@ def list_products(
     db: Session = Depends(get_db),
 ):
     return product_service.get_products(db, skip=skip, limit=limit)
+
+
+@router.get("/with-versions")
+def list_products_with_versions(db: Session = Depends(get_db)):
+    products = product_service.get_products(db)
+    return [
+        {
+            "product": ProductOut.model_validate(product),
+            "versions": [
+                VersionOut.model_validate(version)
+                for version in version_service.get_versions(db, product.id)
+            ],
+        }
+        for product in products
+    ]
 
 
 @router.get("/{slug}", response_model=ProductOut)
