@@ -38,7 +38,7 @@ def to_stored_doc_path(file_path: Path | str) -> str:
     try:
         rel = path.relative_to(root)
     except ValueError:
-        return str(path).replace("\\", "/")
+        raise ValueError(f"Document path {path} is outside docs root {root}")
     return str(rel).replace("\\", "/")
 
 

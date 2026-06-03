@@ -185,7 +185,9 @@ def _sorted_children(doc: Document) -> list[Document]:
 
 
 def build_tree(documents: list[Document], locale: str | None = None) -> list[dict]:
-    result = []
+    result: list[dict] = []
+    stack: list[tuple[Document, list[dict]]] = []
+
     for doc in documents:
         item = {
             "id": doc.id,
@@ -198,9 +200,30 @@ def build_tree(documents: list[Document], locale: str | None = None) -> list[dic
             "created_at": doc.created_at,
             "updated_at": doc.updated_at,
             "locale_available": content_locale_available(doc, locale),
-            "children": build_tree(_sorted_children(doc), locale),
+            "children": [],
         }
         result.append(item)
+        stack.append((doc, item["children"]))
+
+    while stack:
+        parent_doc, children_list = stack.pop()
+        for child in _sorted_children(parent_doc):
+            child_item = {
+                "id": child.id,
+                "version_id": child.version_id,
+                "parent_id": child.parent_id,
+                "title": document_display_title(child, locale),
+                "slug": child.slug,
+                "file_path": child.file_path,
+                "sort_order": child.sort_order,
+                "created_at": child.created_at,
+                "updated_at": child.updated_at,
+                "locale_available": content_locale_available(child, locale),
+                "children": [],
+            }
+            children_list.append(child_item)
+            stack.append((child, child_item["children"]))
+
     return result
 
 
@@ -302,8 +325,10 @@ def update_document(
             reposition_document(db, db_obj, new_parent_id, sort_order)
             db.refresh(db_obj)
 
+    allowed_fields = {"title", "sort_order"}
     for field, value in update_data.items():
-        setattr(db_obj, field, value)
+        if field in allowed_fields:
+            setattr(db_obj, field, value)
 
     db.commit()
     db.refresh(db_obj)

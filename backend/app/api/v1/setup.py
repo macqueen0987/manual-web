@@ -19,8 +19,7 @@ def get_setup_status(
     _rate: None = rate_limit(max_calls=60, window_seconds=60, scope="setup_status"),
 ):
     user_count = db.query(User).count()
-    product_count = db.query(Product).count()
-    return {"is_setup_complete": user_count > 0 and product_count > 0}
+    return {"is_setup_complete": user_count > 0}
 
 
 @router.post("/init")
@@ -37,6 +36,12 @@ def setup_init(
         )
 
     admin_user = create_user(db, body.admin, is_superuser=True)
+    # Race-condition guard: abort if another request created a user simultaneously
+    if db.query(User).count() > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Setup race condition detected",
+        )
     db_product = create_product(db, body.product)
     latest_version = (
         db.query(Version)
