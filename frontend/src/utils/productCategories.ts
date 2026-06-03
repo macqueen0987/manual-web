@@ -2,6 +2,7 @@ import { translate, type Locale } from '../i18n'
 import { sortProductsInGroup } from './productSortOrder'
 
 export interface ProductWithCategory {
+  has_public_docs?: boolean
   id: number
   name: string
   slug: string

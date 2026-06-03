@@ -187,11 +187,18 @@ function ProductExploreCard({
             <h3 className="font-display text-base font-semibold leading-snug text-ink transition-colors group-hover:text-accent sm:text-lg">
               {product.name}
             </h3>
-            {category ? (
-              <span className="mt-1.5 inline-block rounded-md bg-stone-100 px-2 py-0.5 text-xs font-medium text-ink-muted">
-                {category}
-              </span>
-            ) : null}
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {category ? (
+                <span className="inline-block rounded-md bg-stone-100 px-2 py-0.5 text-xs font-medium text-ink-muted">
+                  {category}
+                </span>
+              ) : null}
+              {product.has_public_docs === false ? (
+                <span className="inline-block rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900">
+                  {translate(locale, 'home.docsNotPublishedYet')}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
         {product.description ? (
@@ -203,8 +210,14 @@ function ProductExploreCard({
             {translate(locale, 'home.noDescription')}
           </p>
         )}
-        <span className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-accent">
-          {translate(locale, 'home.viewDocs')}
+        <span
+          className={`mt-5 inline-flex items-center gap-1 text-sm font-medium ${
+            product.has_public_docs === false ? 'text-ink-muted' : 'text-accent'
+          }`}
+        >
+          {product.has_public_docs === false
+            ? translate(locale, 'home.docsNotPublishedYet')
+            : translate(locale, 'home.viewDocs')}
           <ArrowRight
             size={16}
             className="transition-transform group-hover:translate-x-0.5"

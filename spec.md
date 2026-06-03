@@ -431,7 +431,7 @@ manual-web/
 
 ### 테스트·품질 (로드맵 외)
 - [x] `backend/tests/` pytest (문서·버전·검색·미디어 등)
-- [~] Vitest (auth, slugify, markdown)
+- [x] Vitest (auth, slugify, markdown, hooks, utils, components)
 
 ---
 

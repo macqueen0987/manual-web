@@ -23,7 +23,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS document_fts USING fts5(
 )
 """
 
-PUBLIC_VERSION_FILTER = Version.is_published == True
+PUBLIC_VERSION_FILTER = (Version.is_published == True) & (Version.is_latest == False)
 
 
 def ensure_fts() -> None:
@@ -88,6 +88,7 @@ def sync_document(db: Session, doc_id: int) -> None:
         if (
             not version
             or not version.is_published
+            or version.is_latest
             or not product
             or (product.category or "").strip() == ADMIN_ONLY_CATEGORY
         ):
@@ -141,6 +142,7 @@ def search_documents(db: Session, q: str, product_slug: str | None = None) -> li
         JOIN products p ON p.id = document_fts.product_id
         WHERE document_fts MATCH :fts_q
           AND v.is_published = 1
+          AND v.is_latest = 0
           AND (trim(p.category) IS NULL OR trim(p.category) != :admin_only_category)
     """
     params: dict = {"fts_q": fts_q, "admin_only_category": ADMIN_ONLY_CATEGORY}

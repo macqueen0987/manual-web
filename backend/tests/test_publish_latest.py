@@ -76,6 +76,11 @@ def test_publish_latest_creates_published_snapshot(db, publish_paths):
     assert cloned[0].slug == "guide"
     assert cloned[0].file_path == f"{product.slug}/f4a15ed7/guide.md"
 
+    latest_docs = db.query(Document).filter(Document.version_id == latest.id).all()
+    assert len(latest_docs) == 1
+    assert latest_docs[0].slug == "index"
+    assert not (latest_dir / "guide.md").exists()
+
 
 def test_publish_latest_rejects_duplicate_slug(db, publish_paths):
     docs_root = publish_paths

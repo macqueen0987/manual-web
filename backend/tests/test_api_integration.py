@@ -17,6 +17,15 @@ def test_health(api_client):
     assert res.json() == {"status": "ok"}
 
 
+def test_site_branding_public(api_client):
+    res = api_client.get("/api/site/branding")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["title"]
+    assert len(data["logo_letter"]) == 1
+    assert "logo_url" in data
+
+
 def test_setup_status_empty(api_client):
     res = api_client.get("/api/setup/status")
     assert res.status_code == 200
@@ -55,6 +64,9 @@ def test_public_versions_only_published(api_client, db):
     assert res.status_code == 200
     slugs = {v["slug"] for v in res.json()}
     assert slugs == {"pub-01"}
+
+    latest_docs = api_client.get("/api/products/vis-prod/versions/latest/documents")
+    assert latest_docs.status_code == 404
 
 
 def test_admin_versions_include_latest(api_client, db):

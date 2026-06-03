@@ -75,6 +75,31 @@
   padding: 0 0.15em;
 }
 
+/* HTML color tags in markdown (class or inline color on span) */
+.doc-prose .doc-color-red {
+  color: #dc2626;
+}
+
+.doc-prose .doc-color-blue {
+  color: #2563eb;
+}
+
+.doc-prose .doc-color-green {
+  color: #059669;
+}
+
+.doc-prose .doc-color-muted {
+  color: #78716c;
+}
+
+.doc-prose mark.doc-mark-amber {
+  background-color: #fde68a;
+}
+
+.doc-prose mark.doc-mark-sky {
+  background-color: #bae6fd;
+}
+
 /* Lists — preflight strips list-style; custom bullets/numbers */
 .doc-prose ol {
   counter-reset: doc-ol;

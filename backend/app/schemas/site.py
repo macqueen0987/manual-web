@@ -2,6 +2,16 @@ import re
 
 from pydantic import BaseModel, Field, field_validator
 
+
+class SiteBranding(BaseModel):
+    title: str = Field(..., max_length=128)
+    logo_url: str | None = Field(None, max_length=2048)
+    logo_letter: str = Field(..., min_length=1, max_length=1)
+
+
+class HomeHeroTemplate(BaseModel):
+    html: str | None = Field(None, max_length=65536)
+
 MAX_SHOWCASE_SLOTS = 4
 
 

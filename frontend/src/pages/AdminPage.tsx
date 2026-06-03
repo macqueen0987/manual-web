@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ExternalLink,
+  Eye,
   Pencil,
   Plus,
+  Send,
   Trash2,
+  XCircle,
 } from 'lucide-react'
 import client from '../api/client'
 import AdminLayout from '../components/admin/AdminLayout'
@@ -83,6 +86,14 @@ export default function AdminPage() {
         return 0
       })
     : []
+
+  const versionGroups = useMemo(() => {
+    return {
+      working: selectedVersions.filter((v) => v.is_latest),
+      published: selectedVersions.filter((v) => !v.is_latest && v.is_published),
+      drafts: selectedVersions.filter((v) => !v.is_latest && !v.is_published),
+    }
+  }, [selectedVersions])
 
   const loadData = async () => {
     try {
@@ -250,6 +261,29 @@ export default function AdminPage() {
     }
   }
 
+  const handleDeleteVersion = async (v: Version) => {
+    const confirmKey = v.is_latest
+      ? 'admin.deleteWorkingCopyConfirm'
+      : 'admin.deleteVersionConfirm'
+    if (!confirm(translate(locale, confirmKey, { name: v.name }))) {
+      return
+    }
+    try {
+      await client.delete(`/versions/${v.id}`)
+      notify(
+        translate(
+          locale,
+          v.is_latest ? 'admin.workingCopyReset' : 'admin.versionDeleted',
+        ),
+      )
+      await loadData()
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      notify(detail || translate(locale, 'admin.versionDeleteFailed'), 'error')
+    }
+  }
+
   const openEditor = (v: Version) => {
     navigate(
       `/admin/products/${selected!.slug}/${v.is_latest ? 'latest' : v.slug}/editor`,
@@ -305,9 +339,163 @@ export default function AdminPage() {
   }
 
   const versionStatusSuffix = (v: Version) => {
-    if (v.is_latest) return ' · 작업 중'
-    return v.is_published ? ' · 게시됨' : ' · 게시되지 않음'
+    if (v.is_latest) return ` · ${translate(locale, 'admin.workingCopyStatus')}`
+    return v.is_published
+      ? ` · ${translate(locale, 'admin.publishedBadge')}`
+      : ` · ${translate(locale, 'admin.draftSnapshotBadge')}`
   }
+
+  const renderVersionRow = (v: Version) => (
+    <tr key={v.id} className="border-t border-stone-50">
+      <td className="px-4 py-3 font-medium">
+        <span className="inline-flex items-center gap-1">
+          {v.name}
+          <button
+            type="button"
+            onClick={() => openRenameVersion(v)}
+            className="inline-flex rounded p-0.5 text-accent transition-colors hover:bg-accent/10"
+            title={translate(locale, 'admin.renameVersion')}
+            aria-label={translate(locale, 'admin.renameVersion')}
+          >
+            <Pencil size={14} />
+          </button>
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={
+            v.is_latest
+              ? 'rounded-full bg-accent-muted px-2 py-0.5 text-xs font-medium text-accent-hover'
+              : v.is_published
+                ? 'rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-ink-muted'
+                : 'rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900'
+          }
+        >
+          {v.is_latest
+            ? translate(locale, 'admin.workingCopyStatus')
+            : v.is_published
+              ? translate(locale, 'admin.publishedBadge')
+              : translate(locale, 'admin.draftSnapshotBadge')}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <div
+          className="flex flex-wrap items-center justify-end gap-1.5"
+          role="group"
+          aria-label={`${v.name} 버전 작업`}
+        >
+          <button
+            type="button"
+            onClick={() => openEditor(v)}
+            className="admin-btn-secondary admin-btn-sm"
+          >
+            <Pencil size={14} aria-hidden />
+            편집
+          </button>
+          {v.is_latest ? (
+            <>
+              <a
+                href={`/${selected!.slug}/latest`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="admin-btn-secondary admin-btn-sm"
+                title="관리자 미리보기 (독자에게는 비공개)"
+              >
+                <Eye size={14} aria-hidden />
+                미리보기
+              </a>
+              <button
+                type="button"
+                onClick={openPublish}
+                className="admin-btn-primary admin-btn-sm"
+              >
+                <Send size={14} aria-hidden />
+                {translate(locale, 'admin.publishFromWorkingCopy')}
+              </button>
+            </>
+          ) : v.is_published ? (
+            <>
+              <a
+                href={`/${selected!.slug}/${v.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="admin-btn-secondary admin-btn-sm"
+              >
+                <ExternalLink size={14} aria-hidden />
+                {translate(locale, 'admin.viewPublic')}
+              </a>
+              <button
+                type="button"
+                onClick={() => handleUnpublish(v)}
+                className="admin-btn-danger admin-btn-sm"
+              >
+                <XCircle size={14} aria-hidden />
+                게시 취소
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handlePublishSnapshot(v)}
+              className="admin-btn-primary admin-btn-sm"
+            >
+              <Send size={14} aria-hidden />
+              {translate(locale, 'admin.publishDraftSnapshot')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => handleDeleteVersion(v)}
+            className="admin-btn-danger admin-btn-sm"
+            title={
+              v.is_latest
+                ? translate(locale, 'admin.deleteWorkingCopyConfirm', { name: v.name })
+                : translate(locale, 'admin.deleteVersionConfirm', { name: v.name })
+            }
+          >
+            <Trash2 size={14} aria-hidden />
+            {translate(locale, 'common.delete')}
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+
+  const renderVersionGroup = (
+    title: string,
+    description: string,
+    rows: Version[],
+  ) => (
+    <div
+      key={title}
+      className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-card"
+    >
+      <div className="border-b border-stone-100 bg-surface-muted/60 px-4 py-3">
+        <h4 className="text-sm font-semibold text-ink">{title}</h4>
+        <p className="mt-1 text-xs leading-relaxed text-ink-faint">{description}</p>
+      </div>
+      <table className="w-full text-left text-sm">
+        <thead>
+          <tr className="border-b border-stone-100 text-xs uppercase tracking-wider text-ink-faint">
+            <th className="px-4 py-2 font-medium">이름</th>
+            <th className="px-4 py-2 font-medium">상태</th>
+            <th className="px-4 py-2 text-right font-medium">작업</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={3} className="px-4 py-4 text-center text-xs text-ink-muted">
+                {translate(locale, 'admin.versionGroupEmpty')}
+              </td>
+            </tr>
+          ) : (
+            rows.map(renderVersionRow)
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
 
   const newVersionSlugPreview = slugifyVersionName(newVersionName)
   const publishSlugPreview = slugifyVersionName(publishName)
@@ -455,7 +643,7 @@ export default function AdminPage() {
               </div>
 
               <section>
-                <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-ink-faint">
                     버전
                   </h3>
@@ -464,114 +652,38 @@ export default function AdminPage() {
                     onClick={openNewVersion}
                     disabled={selectedVersions.length === 0}
                     className="admin-btn-secondary py-1.5 text-xs"
+                    title={translate(locale, 'admin.newVersionModalBody')}
                   >
                     <Plus size={14} />
-                    새 버전
+                    {translate(locale, 'admin.cloneSnapshotButton')}
                   </button>
                 </div>
-
-                <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-card">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-stone-100 bg-surface-muted/80 text-xs uppercase tracking-wider text-ink-faint">
-                        <th className="px-4 py-3 font-medium">이름</th>
-                        <th className="px-4 py-3 font-medium">상태</th>
-                        <th className="px-4 py-3 text-right font-medium">작업</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedVersions.length === 0 ? (
-                        <tr>
-                          <td colSpan={3} className="px-4 py-8 text-center text-ink-muted">
-                            버전이 없습니다
-                          </td>
-                        </tr>
-                      ) : (
-                        selectedVersions.map((v) => (
-                          <tr key={v.id} className="border-t border-stone-50">
-                            <td className="px-4 py-3 font-medium">
-                              <span className="inline-flex items-center gap-1">
-                                {v.name}
-                                <button
-                                  type="button"
-                                  onClick={() => openRenameVersion(v)}
-                                  className="inline-flex rounded p-0.5 text-accent transition-colors hover:bg-accent/10"
-                                  title={translate(locale, 'admin.renameVersion')}
-                                  aria-label={translate(locale, 'admin.renameVersion')}
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={
-                                  v.is_latest
-                                    ? 'rounded-full bg-accent-muted px-2 py-0.5 text-xs font-medium text-accent-hover'
-                                    : v.is_published
-                                      ? 'rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-ink-muted'
-                                      : 'rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900'
-                                }
-                              >
-                                {v.is_latest
-                                  ? translate(locale, 'admin.workingCopyStatus')
-                                  : v.is_published
-                                    ? translate(locale, 'admin.publishedBadge')
-                                    : '게시되지 않음'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-                                <button
-                                  type="button"
-                                  onClick={() => openEditor(v)}
-                                  className="text-sm font-medium text-accent hover:underline"
-                                >
-                                  편집
-                                </button>
-                                {v.is_published && (
-                                  <a
-                                    href={`/${selected.slug}/${v.slug}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-sm text-ink-muted hover:text-ink hover:underline"
-                                  >
-                                    보기
-                                  </a>
-                                )}
-                                {v.is_published ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUnpublish(v)}
-                                    className="text-sm text-ink-muted hover:text-ink hover:underline"
-                                  >
-                                    게시 취소
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      v.is_latest
-                                        ? openPublish()
-                                        : handlePublishSnapshot(v)
-                                    }
-                                    className="text-sm font-medium text-accent hover:underline"
-                                  >
-                                    게시하기
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-3 text-xs text-ink-faint">
-                  새 버전으로 원하는 스냅샷을 복사해 만들 수 있습니다. 게시됨은 독자에게 공개되며,
-                  게시 취소로 비공개로 돌릴 수 있습니다.
+                <p className="mb-4 text-xs leading-relaxed text-ink-faint">
+                  {translate(locale, 'admin.versionSectionIntro')}
                 </p>
+                {selectedVersions.length === 0 ? (
+                  <p className="rounded-xl border border-stone-200 bg-white px-4 py-8 text-center text-sm text-ink-muted shadow-card">
+                    버전이 없습니다
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {renderVersionGroup(
+                      translate(locale, 'admin.workingCopySectionTitle'),
+                      translate(locale, 'admin.workingCopySectionDesc'),
+                      versionGroups.working,
+                    )}
+                    {renderVersionGroup(
+                      translate(locale, 'admin.publishedSectionTitle'),
+                      translate(locale, 'admin.publishedSectionDesc'),
+                      versionGroups.published,
+                    )}
+                    {renderVersionGroup(
+                      translate(locale, 'admin.draftSectionTitle'),
+                      translate(locale, 'admin.draftSectionDesc'),
+                      versionGroups.drafts,
+                    )}
+                  </div>
+                )}
               </section>
             </>
           )}
@@ -754,7 +866,7 @@ export default function AdminPage() {
 
       <AdminDialog
         open={versionModalOpen}
-        title="새 버전"
+        title={translate(locale, 'admin.newVersionModalTitle')}
         onClose={() => setVersionModalOpen(false)}
         footer={
           <>
@@ -781,6 +893,9 @@ export default function AdminPage() {
           </>
         }
       >
+        <p className="mb-4 text-sm text-ink-muted">
+          {translate(locale, 'admin.newVersionModalBody')}
+        </p>
         <div className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-ink">원본 버전</label>
@@ -811,7 +926,7 @@ export default function AdminPage() {
 
       <AdminDialog
         open={publishModalOpen}
-        title="게시하기"
+        title={translate(locale, 'admin.publishModalTitle')}
         onClose={() => setPublishModalOpen(false)}
         footer={
           <>
@@ -838,8 +953,7 @@ export default function AdminPage() {
         }
       >
         <p className="mb-4 text-sm text-ink-muted">
-          작업 중(latest) 내용을 게시된 스냅샷으로 저장합니다. 게시 후에도 작업 중에서 계속
-          편집할 수 있습니다.
+          {translate(locale, 'admin.publishModalBody')}
         </p>
         <div className="space-y-4">
           <div>

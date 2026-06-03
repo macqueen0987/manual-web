@@ -59,20 +59,37 @@ export default function DocsTopBar({
         </>
       )}
 
-      <select
-        className="ui-input hidden w-auto min-w-[7rem] py-1.5 text-sm sm:block"
-        value={versionSlug === 'latest' ? 'latest' : versionSlug}
-        onChange={(e) => onVersionChange(e.target.value)}
-        aria-label={translate(locale, 'docs.version')}
-      >
-        {versions.map((v) => (
-          <option key={v.id} value={v.is_latest ? 'latest' : v.slug}>
-            {v.name}
-            {v.is_latest ? ` ${translate(locale, 'docs.versionLatest')}` : ''}
-            {!v.is_published ? ` ${translate(locale, 'docs.versionDraft')}` : ''}
-          </option>
-        ))}
-      </select>
+      {versions.length === 0 ? null : versions.length === 1 ? (
+        <span
+          className="hidden rounded-md bg-stone-100 px-2.5 py-1 text-sm font-medium text-ink-muted sm:inline-block"
+          title={translate(locale, 'docs.version')}
+        >
+          {versions[0].name}
+          {versions[0].is_latest
+            ? ` ${translate(locale, 'docs.versionWorkingCopy')}`
+            : !versions[0].is_published
+              ? ` ${translate(locale, 'docs.versionDraft')}`
+              : ''}
+        </span>
+      ) : (
+        <select
+          className="ui-input hidden w-auto min-w-[7rem] py-1.5 text-sm sm:block"
+          value={versionSlug === 'latest' ? 'latest' : versionSlug}
+          onChange={(e) => onVersionChange(e.target.value)}
+          aria-label={translate(locale, 'docs.version')}
+        >
+          {versions.map((v) => (
+            <option key={v.id} value={v.is_latest ? 'latest' : v.slug}>
+              {v.name}
+              {v.is_latest
+                ? ` ${translate(locale, 'docs.versionWorkingCopy')}`
+                : !v.is_published
+                  ? ` ${translate(locale, 'docs.versionDraft')}`
+                  : ''}
+            </option>
+          ))}
+        </select>
+      )}
 
       <LanguageSwitcher onChange={onLocaleChange} />
 

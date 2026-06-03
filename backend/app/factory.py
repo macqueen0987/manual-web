@@ -13,7 +13,7 @@ from app.core.config import get_settings
 from app.db.migrate import run_migrations
 from app.db.session import SessionLocal
 from app.middleware.logging import RequestLoggingMiddleware
-from app.services import search_service
+from app.services import brand_service, search_service
 
 settings = get_settings()
 
@@ -21,6 +21,7 @@ settings = get_settings()
 def init_dirs() -> None:
     Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
     Path(settings.DOCS_DIR).mkdir(parents=True, exist_ok=True)
+    brand_service.sync_brand_logo()
 
 
 def init_db() -> None:
@@ -30,7 +31,13 @@ def init_db() -> None:
 def init_search_index() -> None:
     db = SessionLocal()
     try:
-        search_service.ensure_fts_populated(db)
+        from app.services import version_service
+
+        repaired = version_service.repair_working_copy_flags(db)
+        if repaired:
+            search_service.rebuild_fts_index(db)
+        else:
+            search_service.ensure_fts_populated(db)
     finally:
         db.close()
 

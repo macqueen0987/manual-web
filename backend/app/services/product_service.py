@@ -8,7 +8,16 @@ from app.core.config import get_settings
 from app.core.product_visibility import ADMIN_ONLY_CATEGORY, normalize_category
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate
+from app.schemas.product import ProductOut
+from app.services import version_service
 from app.services.bootstrap_service import bootstrap_product
+
+
+def product_to_out(db: Session, product: Product) -> ProductOut:
+    has_public = version_service.count_public_versions(db, product.id) > 0
+    return ProductOut.model_validate(product).model_copy(
+        update={"has_public_docs": has_public}
+    )
 
 settings = get_settings()
 

@@ -19,9 +19,10 @@ def list_products(
     db: Session = Depends(get_db),
     admin: User | None = Depends(get_optional_admin_user),
 ):
-    return product_service.get_products(
+    products = product_service.get_products(
         db, skip=skip, limit=limit, include_admin_only=admin is not None
     )
+    return [product_service.product_to_out(db, p) for p in products]
 
 
 @router.get("/with-versions")
@@ -49,7 +50,8 @@ def get_product(
     admin: User | None = Depends(get_optional_admin_user),
 ):
     product = product_service.get_product_by_slug(db, slug)
-    return require_product_for_viewer(product, admin)
+    product = require_product_for_viewer(product, admin)
+    return product_service.product_to_out(db, product)
 
 
 @router.post("", response_model=ProductOut, status_code=status.HTTP_201_CREATED)

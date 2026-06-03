@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BookOpen } from 'lucide-react'
 import CategoryShowcase from '../components/home/CategoryShowcase'
+import HomeHeroSection from '../components/home/HomeHeroSection'
+import { useHomeHero } from '../hooks/useHomeHero'
 import ExploreProductDirectory from '../components/home/ExploreProductDirectory'
 import client from '../api/client'
 import PublicHeader from '../components/layout/PublicHeader'
@@ -18,6 +20,7 @@ import {
 
 export default function HomePage() {
   const { locale } = useDocLocale()
+  const heroHtml = useHomeHero(locale)
   const [products, setProducts] = useState<ProductWithCategory[]>([])
   const [homeContent, setHomeContent] = useState<HomeContent | null>(null)
   const [loading, setLoading] = useState(true)
@@ -56,14 +59,7 @@ export default function HomePage() {
         }
       />
 
-      <section className="border-b border-stone-200/80 bg-gradient-to-b from-surface-raised to-surface">
-        <div className="mx-auto max-w-6xl px-4 py-5 text-center sm:px-6 sm:py-6">
-          <h1 className="sr-only">{translate(locale, 'home.heroTitle')}</h1>
-          <p className="text-sm leading-relaxed text-ink-muted sm:text-base">
-            {localeContent.hero_tagline}
-          </p>
-        </div>
-      </section>
+      <HomeHeroSection locale={locale} customHtml={heroHtml} />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:py-12">
         {publicProducts.length === 0 ? (

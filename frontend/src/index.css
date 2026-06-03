@@ -67,6 +67,10 @@
     @apply inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800 transition-colors duration-200 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200 disabled:pointer-events-none disabled:opacity-50;
   }
 
+  .admin-btn-sm {
+    @apply min-h-0 gap-1.5 px-2.5 py-1 text-xs;
+  }
+
   .ui-btn-ghost {
     @apply inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted transition-colors duration-200 hover:bg-surface-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-stone-200;
   }

@@ -30,6 +30,7 @@ class ProductOut(ProductBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    has_public_docs: bool = False
 
     class Config:
         from_attributes = True

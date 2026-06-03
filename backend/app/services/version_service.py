@@ -24,6 +24,18 @@ def get_versions(db: Session, product_id: int, skip: int = 0, limit: int = 100):
     )
 
 
+def count_public_versions(db: Session, product_id: int) -> int:
+    return (
+        db.query(Version)
+        .filter(
+            Version.product_id == product_id,
+            Version.is_published == True,
+            Version.is_latest == False,
+        )
+        .count()
+    )
+
+
 def get_versions_for_viewer(
     db: Session,
     product_id: int,
@@ -34,12 +46,16 @@ def get_versions_for_viewer(
 ):
     query = db.query(Version).filter(Version.product_id == product_id)
     if not include_unpublished:
-        query = query.filter(Version.is_published == True)
+        query = query.filter(
+            Version.is_published == True,
+            Version.is_latest == False,
+        )
     return query.order_by(Version.created_at.desc()).offset(skip).limit(limit).all()
 
 
 def version_visible_to_public(version: Version) -> bool:
-    return bool(version.is_published)
+    """Readers see published snapshots only — never the working copy (``is_latest``)."""
+    return bool(version.is_published) and not version.is_latest
 
 
 def get_version_by_slug_for_viewer(
@@ -198,8 +214,32 @@ def publish_latest(db: Session, product_id: int, product_slug: str, obj_in: Vers
     clone_documents_between_versions(
         db, latest.id, published.id, product_slug, "latest", obj_in.slug
     )
+    if latest.is_published:
+        latest.is_published = False
+        db.commit()
     db.refresh(published)
+
+    from app.services import product_service
+
+    product = product_service.get_product(db, product_id)
+    if product:
+        reset_working_copy(db, latest, product_slug, product)
+
     return published
+
+
+def repair_working_copy_flags(db: Session) -> int:
+    """Ensure working copies are never marked published (legacy data fix)."""
+    rows = (
+        db.query(Version)
+        .filter(Version.is_latest == True, Version.is_published == True)
+        .all()
+    )
+    for version in rows:
+        version.is_published = False
+    if rows:
+        db.commit()
+    return len(rows)
 
 
 def publish_existing_version(db: Session, db_obj: Version) -> Version:
@@ -240,9 +280,51 @@ def update_version(db: Session, db_obj: Version, obj_in: VersionUpdate) -> Versi
     return db_obj
 
 
-def delete_version(db: Session, db_obj: Version, product_slug: str):
+def reset_working_copy(db: Session, db_obj: Version, product_slug: str, product) -> Version:
+    """Clear all documents under the working copy and restore a blank index."""
+    if not db_obj.is_latest:
+        raise ValueError("Not a working copy")
+
+    from app.models.document import Document
+    from app.services import bootstrap_service, document_service
+
+    while True:
+        docs = db.query(Document).filter(Document.version_id == db_obj.id).all()
+        if not docs:
+            break
+        deleted_any = False
+        for doc in docs:
+            has_child = (
+                db.query(Document).filter(Document.parent_id == doc.id).first()
+            )
+            if has_child:
+                continue
+            document_service.delete_document(
+                db, doc, product_slug=product_slug, version_slug="latest"
+            )
+            deleted_any = True
+        if not deleted_any:
+            raise ValueError("Circular or broken document parent references")
+
+    latest_dir = Path(settings.DOCS_DIR) / product_slug / "latest"
+    if latest_dir.exists():
+        shutil.rmtree(latest_dir)
+    latest_dir.mkdir(parents=True, exist_ok=True)
+
+    bootstrap_service.ensure_index_document(db, product, db_obj)
+    db.refresh(db_obj)
+    return db_obj
+
+
+def delete_version(db: Session, db_obj: Version, product_slug: str, product=None):
     if db_obj.is_latest:
-        raise ValueError("Cannot delete the latest working version")
+        if product is None:
+            from app.services import product_service
+
+            product = product_service.get_product(db, db_obj.product_id)
+        if not product:
+            raise ValueError("Product not found")
+        return reset_working_copy(db, db_obj, product_slug, product)
 
     if db_obj.snapshot_path:
         snapshot_dir = Path(db_obj.snapshot_path)

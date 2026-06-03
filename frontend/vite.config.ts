@@ -1,9 +1,10 @@
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const srcDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'src')
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -11,7 +12,7 @@ export default defineConfig({
   envPrefix: 'DEFAULT_',
   resolve: {
     alias: {
-      '@': path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'src'),
+      '@': srcDir,
     },
   },
   plugins: [react()],
@@ -26,6 +27,31 @@ export default defineConfig({
       '/uploads': {
         target: 'http://backend:8000',
         changeOrigin: true,
+      },
+    },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    exclude: ['**/node_modules/**', '**/e2e/**'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/test/**',
+        'src/**/*.d.ts',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        'src/i18n/locales/**',
+        'src/types/**',
+        'src/pages/**',
+      ],
+      thresholds: {
+        lines: 25,
+        statements: 25,
+        functions: 55,
+        branches: 65,
       },
     },
   },

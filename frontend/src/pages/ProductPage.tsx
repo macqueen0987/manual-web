@@ -343,6 +343,20 @@ export default function ProductPage() {
               <article className="w-full min-w-0 max-w-[42rem] xl:max-w-[48rem]">
                 <Breadcrumbs items={contentBreadcrumbs} className="mb-4 text-xs sm:text-sm" />
 
+                {versionsReady && versions.length === 0 && (
+                  <div
+                    className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                    role="status"
+                  >
+                    <p className="font-medium">
+                      {translate(locale, 'home.noPublishedVersions')}
+                    </p>
+                    <p className="mt-1 text-amber-900/90">
+                      {translate(locale, 'home.noPublishedVersionsHint')}
+                    </p>
+                  </div>
+                )}
+
                 {document &&
                   isSecondaryContentLocale(locale) &&
                   document.locale_available === false && (
@@ -378,8 +392,15 @@ export default function ProductPage() {
                 ) : (
                   <EmptyState
                     icon={<FileText size={40} strokeWidth={1.25} />}
-                    title={translate(locale, 'docs.selectDoc')}
-                    description={translate(locale, 'docs.selectDocHint')}
+                    title={translate(
+                      locale,
+                      docs.length === 0 ? 'docs.noDocs' : 'docs.selectDoc',
+                    )}
+                    description={
+                      docs.length === 0
+                        ? undefined
+                        : translate(locale, 'docs.selectDocHint')
+                    }
                   />
                 )}
               </article>

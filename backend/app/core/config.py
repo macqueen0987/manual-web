@@ -20,6 +20,12 @@ class Settings(BaseSettings):
         default="ko",
         validation_alias=AliasChoices("DEFAULT_LOCALE", "DEFAULT_CONTENT_LOCALE"),
     )
+    SITE_BRAND_TITLE: str = "Manual Web"
+    SITE_BRAND_LOGO_PATH: str = ""
+    SITE_BRAND_LOGO_LETTER: str = ""
+    SITE_HOME_HERO_HTML_PATH: str = ""
+    SITE_HOME_HERO_HTML_PATH_KO: str = ""
+    SITE_HOME_HERO_HTML_PATH_EN: str = ""
 
     class Config:
         env_file = ".env"

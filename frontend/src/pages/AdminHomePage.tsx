@@ -139,23 +139,6 @@ export default function AdminHomePage() {
           ))}
         </div>
 
-        <section className="ui-card mb-6 p-5 sm:p-6">
-          <h2 className="font-display text-lg font-semibold text-ink">
-            {translate(uiLocale, 'admin.homeEditorHero')}
-          </h2>
-          <label className="mt-4 block">
-            <span className="text-sm font-medium text-ink-muted">
-              {translate(uiLocale, 'admin.homeEditorHeroTagline')}
-            </span>
-            <textarea
-              className="ui-textarea mt-1.5"
-              rows={2}
-              value={localeContent.hero_tagline}
-              onChange={(e) => patchLocale({ hero_tagline: e.target.value })}
-            />
-          </label>
-        </section>
-
         <section className="ui-card p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>

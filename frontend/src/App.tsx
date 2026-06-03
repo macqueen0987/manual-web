@@ -15,8 +15,10 @@ import ErrorBoundary from './components/ErrorBoundary'
 import AdminRoute from './components/auth/AdminRoute'
 import { translate } from './i18n'
 import { useLocaleStore } from './stores/localeStore'
+import { useSiteBranding } from './hooks/useSiteBranding'
 
 function App() {
+  useSiteBranding()
   const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null)
   const [setupLoading, setSetupLoading] = useState(true)
   const bootstrap = useAuthStore((s) => s.bootstrap)
