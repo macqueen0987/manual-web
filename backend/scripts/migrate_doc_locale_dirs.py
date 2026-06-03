@@ -1,7 +1,7 @@
 """
 Move legacy root-level and ``*.{en,ko}.md`` files into ``en/`` / ``ko/`` subfolders.
 
-  docker compose exec backend python scripts/migrate_doc_locale_dirs.py
+  docker compose -f docker-compose.dev.yml exec backend python scripts/migrate_doc_locale_dirs.py
 """
 
 from __future__ import annotations

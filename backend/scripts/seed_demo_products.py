@@ -1,7 +1,7 @@
 """Seed demo products for landing page (Blue / beSRT categories).
 
 Usage (Docker):
-  docker compose exec backend python scripts/seed_demo_products.py
+  docker compose -f docker-compose.dev.yml exec backend python scripts/seed_demo_products.py
 """
 
 import sys

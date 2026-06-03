@@ -8,6 +8,7 @@ class ProductBase(BaseModel):
     slug: str = Field(..., min_length=1, max_length=255, pattern=r"^[a-z0-9-]+$")
     description: str | None = None
     category: str | None = Field(None, max_length=128)
+    icon_url: str | None = Field(None, max_length=512)
     sort_order: int = 0
     is_active: bool = True
 
@@ -20,6 +21,7 @@ class ProductUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     category: str | None = Field(None, max_length=128)
+    icon_url: str | None = Field(None, max_length=512)
     sort_order: int | None = None
     is_active: bool | None = None
 

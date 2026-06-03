@@ -1,7 +1,7 @@
 """Seed sample documentation for demo / UI testing.
 
 Usage (Docker):
-  docker compose exec backend python scripts/seed_sample_docs.py
+  docker compose -f docker-compose.dev.yml exec backend python scripts/seed_sample_docs.py
 """
 
 import sys

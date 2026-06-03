@@ -44,11 +44,13 @@ def get_product(db: Session, product_id: int):
 
 def create_product(db: Session, obj_in: ProductCreate):
     category = normalize_category(obj_in.category)
+    icon_url = (obj_in.icon_url or "").strip() or None
     db_obj = Product(
         name=obj_in.name,
         slug=obj_in.slug,
         description=obj_in.description,
         category=category or None,
+        icon_url=icon_url,
         sort_order=obj_in.sort_order,
         is_active=obj_in.is_active,
     )
@@ -63,6 +65,9 @@ def update_product(db: Session, db_obj: Product, obj_in: ProductUpdate):
     update_data = obj_in.model_dump(exclude_unset=True)
     if "category" in update_data:
         update_data["category"] = normalize_category(update_data["category"])
+    if "icon_url" in update_data:
+        raw = update_data["icon_url"]
+        update_data["icon_url"] = (raw or "").strip() or None
     for field, value in update_data.items():
         setattr(db_obj, field, value)
     db.commit()
