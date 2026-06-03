@@ -11,7 +11,7 @@ services:
       - ./backend/data:/app/data
     environment:
       - APP_ENV=development
-      - SECRET_KEY=dev-secret-key-change-in-production
+      - SECRET_KEY=dev-local-secret-key-min-32-chars!!
       - DATABASE_URL=sqlite:///data/app.db
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 

@@ -217,5 +217,26 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Manual Web runtime data (SQLite, markdown docs, uploads)
+# --- Manual Web (monorepo) ---
+
+# Runtime data: SQLite, markdown docs, uploads (see spec.md)
 backend/data/
+
+# Frontend (Vite); frontend/.gitignore also applies under frontend/
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+
+# Agent Gate: compiled hook binaries (rebuild from agent-gate repo)
+hooks/bin/
+hooks/agent_gate_hook.py
+hooks/workspace.py
+
+# Local IDE / assistant config (team shares .cursor/, not these)
+.kimi/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
