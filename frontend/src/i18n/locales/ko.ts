@@ -39,6 +39,8 @@ export const ko: Messages = {
     openMenuAria: '문서 메뉴 열기',
     noTranslationShowingDefault:
       '이 페이지의 {{lang}} 번역이 없어 기본 문서를 표시합니다.',
+    noTranslationAvailable: '이 페이지의 {{lang}} 번역이 없습니다.',
+    noBodyContent: '본문 내용이 없습니다.',
   },
   search: {
     resultsDialog: '검색 결과',

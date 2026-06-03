@@ -162,3 +162,13 @@ def test_tool_import_skips_local_images_when_disabled(mcp_tools, mcp_client, mcp
     assert "./local.png" in doc["content"]
 
     tool_result(mcp_tools.delete_document(imported["document"]["id"]))
+
+
+def test_mcp_server_exposes_agent_instructions(mcp_tools):
+    import server as srv  # noqa: E402
+    from instructions import SERVER_INSTRUCTIONS  # noqa: E402
+
+    assert srv.mcp.instructions == SERVER_INSTRUCTIONS
+    assert "version_slug" in SERVER_INSTRUCTIONS
+    assert "latest" in SERVER_INSTRUCTIONS
+    assert mcp_tools.list_products.__doc__

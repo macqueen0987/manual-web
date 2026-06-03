@@ -23,10 +23,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mcp.server.fastmcp import FastMCP
 
 from client import ManualWebClient, ManualWebError
+from instructions import SERVER_INSTRUCTIONS
 from markdown_media import UPLOADABLE_EXTENSIONS, rewrite_markdown_local_images
 
 mcp = FastMCP(
     "manual-web",
+    instructions=SERVER_INSTRUCTIONS,
     host=os.environ.get("MCP_HOST", "127.0.0.1"),
     port=int(os.environ.get("MCP_PORT", "8000")),
 )
@@ -65,21 +67,21 @@ def _prepare_markdown_content(
 
 @mcp.tool()
 def list_products() -> str:
-    """List all products (manuals) in Manual Web."""
+    """Manual Web 제품(매뉴얼) 목록. 각 항목의 `slug`가 다른 도구의 `product_slug`입니다."""
     products = client.list_products()
     return json.dumps(products, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
 def list_documents(product_slug: str, version_slug: str = "latest") -> str:
-    """List document tree for a product version."""
+    """제품·버전의 문서 트리. `version_slug=\"latest\"`는 관리자 작업중(working copy)입니다."""
     tree = client.list_document_tree(product_slug, version_slug)
     return json.dumps(tree, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
 def get_document(product_slug: str, doc_slug: str, version_slug: str = "latest") -> str:
-    """Read a document's markdown content and metadata."""
+    """문서 한 페이지의 마크다운 본문·메타데이터 조회 (`doc_slug` 기준)."""
     doc = client.get_document(product_slug, doc_slug, version_slug)
     return json.dumps(doc, ensure_ascii=False, indent=2)
 
@@ -94,7 +96,10 @@ def create_document(
     version_slug: str = "latest",
     sort_order: int = 0,
 ) -> str:
-    """Create a new document (requires admin login env vars)."""
+    """새 문서 생성(관리자 env 필요). slug가 이미 있으면 실패 — 덮어쓰기는 import 도구 사용.
+
+    붙여넣기 md에 로컬 상대 이미지가 있으면 먼저 `upload_media`로 URL을 넣으세요.
+    `version_slug` 기본 `latest` = 작업중."""
     if not _slug_ok(slug):
         return json.dumps({"error": "Invalid slug — use letters, numbers, . _ - only"})
     try:
@@ -124,7 +129,7 @@ def update_document(
     title: str | None = None,
     content: str | None = None,
 ) -> str:
-    """Update document title and/or markdown content by ID."""
+    """`document_id`로 제목·마크다운 본문 수정(관리자 env). 이미지는 create와 동일 규칙."""
     try:
         doc = client.update_document(document_id, title=title, content=content)
         return json.dumps(doc, ensure_ascii=False, indent=2)
@@ -134,7 +139,7 @@ def update_document(
 
 @mcp.tool()
 def delete_document(document_id: int) -> str:
-    """Delete a document by ID (fails if it has child documents)."""
+    """문서 삭제. 하위 문서가 있으면 실패. 서버가 고아 업로드 정리를 할 수 있습니다."""
     try:
         return json.dumps(client.delete_document(document_id), ensure_ascii=False, indent=2)
     except ManualWebError as e:
@@ -147,7 +152,9 @@ def upload_media(
     product_slug: str,
     version_slug: str = "latest",
 ) -> str:
-    """Upload an image or file (png, jpg, gif, webp, mp4, pdf, zip) to /uploads/{product}/{version}/."""
+    """미디어 1개 업로드 → JSON의 `url`을 마크다운에 사용 (png/jpg/gif/webp/mp4/pdf/zip).
+
+    `create_document` 본문에 넣기 전 단계로 쓰거나, import 없이 이미지만 올릴 때 사용."""
     path = Path(file_path).expanduser().resolve()
     if not path.is_file():
         return json.dumps({"error": f"File not found: {path}"})
@@ -168,7 +175,7 @@ def upload_media_directory(
     product_slug: str,
     version_slug: str = "latest",
 ) -> str:
-    """Upload all allowed media files under a directory (recursive)."""
+    """디렉터리 아래 허용 확장자 파일을 재귀 업로드. 항목별 `url`·`id` 반환."""
     root = Path(directory_path).expanduser().resolve()
     if not root.is_dir():
         return json.dumps({"error": f"Directory not found: {root}"})
@@ -197,7 +204,7 @@ def list_media(
     version_slug: str = "latest",
     orphans_only: bool = False,
 ) -> str:
-    """List uploaded media for a product version."""
+    """버전별 업로드 목록. `orphans_only=true`면 어떤 문서 md에도 안 쓰인 파일만."""
     try:
         data = client.list_media(product_slug, version_slug, orphans_only=orphans_only)
         return json.dumps(data, ensure_ascii=False, indent=2)
@@ -207,7 +214,7 @@ def list_media(
 
 @mcp.tool()
 def delete_media(media_id: str) -> str:
-    """Delete one upload by id (e.g. product/latest/uuid.png)."""
+    """업로드 1건 삭제. `media_id` 예: `product-slug/latest/uuid.png`."""
     try:
         return json.dumps(client.delete_media(media_id), ensure_ascii=False, indent=2)
     except ManualWebError as e:
@@ -216,7 +223,7 @@ def delete_media(media_id: str) -> str:
 
 @mcp.tool()
 def cleanup_orphan_media(product_slug: str, version_slug: str = "latest") -> str:
-    """Delete uploads not referenced in any document markdown for this version."""
+    """이 버전 문서 마크다운 어디에도 참조되지 않은 업로드를 일괄 삭제."""
     try:
         return json.dumps(
             client.cleanup_orphan_media(product_slug, version_slug),
@@ -237,11 +244,10 @@ def import_markdown_file(
     version_slug: str = "latest",
     upload_local_images: bool = True,
 ) -> str:
-    """Import a single local .md file into Manual Web (create or overwrite by slug).
+    """로컬 `.md` 1개를 slug 기준으로 생성·덮어쓰기(upsert). 작업중은 `version_slug=\"latest\"`.
 
-    When upload_local_images is true, ![alt](relative/path) refs next to the .md file
-    are uploaded and rewritten to /uploads/... URLs.
-    """
+    `upload_local_images=true`(기본): md와 같은 폴더의 상대 이미지를 업로드 후 `/uploads/...`로 치환.
+    Docker MCP는 `/workspace/...` 경로 사용."""
     path = Path(file_path).expanduser().resolve()
     if not path.is_file():
         return json.dumps({"error": f"File not found: {path}"})
@@ -287,15 +293,10 @@ def import_markdown_directory(
     parent_slug: str | None = None,
     upload_local_images: bool = True,
 ) -> str:
-    """Bulk-import all .md files under a directory. Folder structure maps to parent slugs.
+    """디렉터리 아래 모든 `.md` 일괄 import. 폴더 구조 → parent slug.
 
-    Local image refs in each .md are resolved relative to that file's directory.
-
-    Examples:
-      docs/index.md           → slug index
-      docs/guide/install.md   → slug install, parent guide
-      docs/guide/index.md     → slug guide (section home)
-    """
+    파일별 이미지는 그 md가 있는 디렉터리 기준. 예: `docs/guide/install.md` → slug `install`, parent `guide`;
+    `docs/guide/index.md` → slug `guide`; `docs/index.md` → slug `index`."""
     root = Path(directory_path).expanduser().resolve()
     if not root.is_dir():
         return json.dumps({"error": f"Directory not found: {root}"})

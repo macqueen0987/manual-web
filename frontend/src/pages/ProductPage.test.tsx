@@ -101,4 +101,47 @@ describe('ProductPage', () => {
     await user.click(screen.getByRole('button', { name: '문서 메뉴 열기' }))
     expect(screen.getByRole('button', { name: '닫기' })).toBeInTheDocument()
   })
+
+  it('shows empty body message when document content is blank', async () => {
+    vi.mocked(client.get).mockImplementation((url: string) => {
+      if (url === '/products/alpha') {
+        return Promise.resolve({ data: { id: 1, name: 'Alpha', slug: 'alpha' } })
+      }
+      if (url === '/products/alpha/versions') {
+        return Promise.resolve({
+          data: [
+            { id: 10, slug: 'pub-01', name: '2026.01', is_latest: false, is_published: true },
+          ],
+        })
+      }
+      if (url.includes('/documents') && !url.endsWith('/guide')) {
+        return Promise.resolve({
+          data: [{ id: 1, slug: 'guide', title: 'Guide', children: [] }],
+        })
+      }
+      if (url.endsWith('/guide')) {
+        return Promise.resolve({
+          data: {
+            id: 1,
+            title: 'Guide',
+            slug: 'guide',
+            content: '',
+            locale_available: false,
+          },
+        })
+      }
+      return Promise.reject(new Error(url))
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/alpha/pub-01/guide']}>
+        <ProductPage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Guide' })).toBeInTheDocument()
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('본문 내용이 없습니다.')
+  })
 })

@@ -37,6 +37,8 @@ export const en = {
     openMenuAria: 'Open document menu',
     noTranslationShowingDefault:
       'No {{lang}} translation for this page; showing the default document.',
+    noTranslationAvailable: 'This page has no {{lang}} translation.',
+    noBodyContent: 'This page has no body content.',
   },
   search: {
     resultsDialog: 'Search results',

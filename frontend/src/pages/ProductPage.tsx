@@ -107,6 +107,12 @@ function contentHasH1(markdown: string): boolean {
   return /^#\s+.+/m.test(markdown)
 }
 
+function hasMarkdownBody(markdown: string): boolean {
+  const trimmed = markdown.trim()
+  if (!trimmed) return false
+  return trimmed.replace(/^#\s+.+\n?/, '').trim().length > 0
+}
+
 function findDocPath(nodes: DocNode[], slug: string, trail: DocNode[] = []): DocNode[] | null {
   for (const node of nodes) {
     if (node.slug === slug) {
@@ -275,6 +281,7 @@ export default function ProductPage() {
   }, [locale, product, productSlug, effectiveVersion, document, activeDocSlug, docs])
 
   const showPageTitle = document && !contentHasH1(document.content)
+  const documentHasBody = document ? hasMarkdownBody(document.content) : false
 
   if (loading) return <PageLoader label={translate(locale, 'common.loading')} />
 
@@ -365,9 +372,15 @@ export default function ProductPage() {
                   isSecondaryContentLocale(locale) &&
                   document.locale_available === false && (
                   <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    {translate(locale, 'docs.noTranslationShowingDefault', {
-                      lang: localeDisplayLabel(locale, locale),
-                    })}
+                    {translate(
+                      locale,
+                      documentHasBody
+                        ? 'docs.noTranslationShowingDefault'
+                        : 'docs.noTranslationAvailable',
+                      {
+                        lang: localeDisplayLabel(locale, locale),
+                      },
+                    )}
                   </p>
                 )}
 
@@ -380,18 +393,24 @@ export default function ProductPage() {
                         </h1>
                       </header>
                     )}
-                    <div
-                      className="doc-prose wmde-markdown max-w-none"
-                      data-color-mode="light"
-                    >
-                      <ReactMarkdown
-                        remarkPlugins={docRemarkPlugins}
-                        rehypePlugins={docContentRehypePlugins}
-                        components={markdownComponents}
+                    {documentHasBody ? (
+                      <div
+                        className="doc-prose wmde-markdown max-w-none"
+                        data-color-mode="light"
                       >
-                        {document.content}
-                      </ReactMarkdown>
-                    </div>
+                        <ReactMarkdown
+                          remarkPlugins={docRemarkPlugins}
+                          rehypePlugins={docContentRehypePlugins}
+                          components={markdownComponents}
+                        >
+                          {document.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-stone-500" role="status">
+                        {translate(locale, 'docs.noBodyContent')}
+                      </p>
+                    )}
                   </>
                 ) : (
                   <EmptyState

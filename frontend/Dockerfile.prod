@@ -4,7 +4,9 @@ COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
 COPY . .
 ARG VITE_API_BASE=
+ARG DEFAULT_LOCALE=ko
 ENV VITE_API_BASE=$VITE_API_BASE
+ENV DEFAULT_LOCALE=$DEFAULT_LOCALE
 RUN npm run build
 
 FROM nginx:1.27-alpine

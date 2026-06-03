@@ -5,11 +5,19 @@ from __future__ import annotations
 import os
 import sys
 import time
+from pathlib import Path
 
 import httpx
+import sqlite3
+
+from provision_admin import provision_mcp_admin, resolve_sqlite_path
 
 API_URL = os.environ.get("MANUAL_WEB_API_URL", "http://localhost:8000").rstrip("/")
-ADMIN_EMAIL = os.environ.get("MCP_ADMIN_EMAIL") or os.environ.get("MANUAL_WEB_EMAIL", "mcp-admin@manual.local")
+ADMIN_EMAIL = (
+    os.environ.get("MCP_ADMIN_EMAIL")
+    or os.environ.get("MANUAL_WEB_EMAIL")
+    or "mcp-admin@example.com"
+)
 ADMIN_PASSWORD = os.environ.get("MCP_ADMIN_PASSWORD") or os.environ.get(
     "MANUAL_WEB_PASSWORD", "mcp-dev-password-min-16-chars"
 )
@@ -33,6 +41,31 @@ def _wait_for_api(client: httpx.Client) -> None:
     sys.exit(1)
 
 
+def _provision_admin_in_db() -> bool:
+    """Create or sync MCP admin in SQLite when API setup is already complete."""
+    if os.environ.get("MCP_PROVISION_DB", "1").lower() in ("0", "false", "no"):
+        return False
+    db_path = resolve_sqlite_path()
+    if db_path is None:
+        print("ensure_setup: DB provision skipped (set MCP_DATABASE_PATH for SQLite)", file=sys.stderr)
+        return False
+    try:
+        action = provision_mcp_admin(
+            Path(db_path),
+            email=ADMIN_EMAIL,
+            password=ADMIN_PASSWORD,
+            full_name=ADMIN_NAME,
+        )
+        print(f"ensure_setup: DB provision {action} superuser {ADMIN_EMAIL} ({db_path})")
+        return True
+    except FileNotFoundError as e:
+        print(f"ensure_setup: DB provision failed — {e}", file=sys.stderr)
+        return False
+    except sqlite3.Error as e:
+        print(f"ensure_setup: DB provision failed — {e}", file=sys.stderr)
+        return False
+
+
 def _try_login(client: httpx.Client) -> bool:
     res = client.post(
         f"{API_URL}/api/auth/login",
@@ -52,9 +85,16 @@ def main() -> None:
                 print(f"ensure_setup: setup complete; admin login OK ({ADMIN_EMAIL})")
                 return
             print(
-                "ensure_setup: warning — setup already done but login failed for "
-                f"{ADMIN_EMAIL}. Set MANUAL_WEB_EMAIL/PASSWORD to an existing superuser, "
-                "or empty the DB and restart MCP to auto-provision.",
+                f"ensure_setup: setup complete but login failed for {ADMIN_EMAIL}; provisioning DB…",
+                file=sys.stderr,
+            )
+            _provision_admin_in_db()
+            if _try_login(client):
+                print(f"ensure_setup: admin login OK after DB provision ({ADMIN_EMAIL})")
+                return
+            print(
+                "ensure_setup: login still failed after DB provision. "
+                "Check MCP_ADMIN_EMAIL/PASSWORD and MCP_DATABASE_PATH.",
                 file=sys.stderr,
             )
             if os.environ.get("MCP_SETUP_STRICT", "").lower() in ("1", "true", "yes"):

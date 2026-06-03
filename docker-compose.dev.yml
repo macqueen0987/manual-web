@@ -53,9 +53,9 @@ services:
       - "${MCP_PORT:-8001}:8001"
     environment:
       - MANUAL_WEB_API_URL=http://backend:8000
-      - MANUAL_WEB_EMAIL=${MCP_ADMIN_EMAIL:-mcp-admin@manual.local}
+      - MANUAL_WEB_EMAIL=${MCP_ADMIN_EMAIL:-mcp-admin@example.com}
       - MANUAL_WEB_PASSWORD=${MCP_ADMIN_PASSWORD:-mcp-dev-password-min-16-chars}
-      - MCP_ADMIN_EMAIL=${MCP_ADMIN_EMAIL:-mcp-admin@manual.local}
+      - MCP_ADMIN_EMAIL=${MCP_ADMIN_EMAIL:-mcp-admin@example.com}
       - MCP_ADMIN_PASSWORD=${MCP_ADMIN_PASSWORD:-mcp-dev-password-min-16-chars}
       - MCP_ADMIN_NAME=${MCP_ADMIN_NAME:-MCP Admin}
       - MCP_BOOTSTRAP_PRODUCT_NAME=${MCP_BOOTSTRAP_PRODUCT_NAME:-MCP Workspace}
@@ -63,8 +63,10 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8001
       - MCP_TRANSPORT=sse
+      - MCP_DATABASE_PATH=/mcp-data/app.db
     volumes:
       - ./:/workspace:ro
+      - ./backend/data:/mcp-data
     depends_on:
       - backend
     restart: unless-stopped
