@@ -19,4 +19,8 @@ describe('slugifyVersionName', () => {
   it('returns 8-char hex from name', () => {
     expect(slugifyVersionName('작업 중')).toMatch(/^[a-f0-9]{8}$/)
   })
+
+  it('matches backend hash for publish display name (golden)', () => {
+    expect(slugifyVersionName('2026.06.03')).toBe('f4a15ed7')
+  })
 })

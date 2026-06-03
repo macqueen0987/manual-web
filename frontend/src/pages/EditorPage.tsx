@@ -32,6 +32,7 @@ import {
   localeDisplayLabel,
   localeToApiParam,
 } from '../utils/contentLocale'
+import { isVersionEditable } from '../utils/versionEdit'
 
 interface Product {
   id: number
@@ -114,7 +115,7 @@ export default function EditorPage() {
     selectedVersion === 'latest'
       ? versions.find((v) => v.is_latest)
       : versions.find((v) => v.slug === selectedVersion)
-  const canEdit = true
+  const canEdit = version ? isVersionEditable(version) : false
 
   const flattenTree = (nodes: DocNode[]): DocNode[] => {
     const result: DocNode[] = []
@@ -630,9 +631,9 @@ export default function EditorPage() {
             ))}
           </select>
 
-          {version?.is_published && (
+          {version && !canEdit && (
             <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-ink-muted">
-              게시됨 — 저장 시 공개 문서에 반영
+              {translate(uiLocale, 'admin.editorReadOnlySnapshot')}
             </span>
           )}
 

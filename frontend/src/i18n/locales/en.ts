@@ -223,6 +223,7 @@ export const en = {
       'You have unsaved changes. Switch editor mode anyway?',
     editorSaved: 'Saved',
     editorSavedTranslation: 'Saved {{lang}} translation',
+    editorReadOnlySnapshot: 'Published snapshot — read only',
   },
 } as const
 

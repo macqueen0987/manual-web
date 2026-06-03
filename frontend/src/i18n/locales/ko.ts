@@ -224,5 +224,6 @@ export const ko: Messages = {
     editorModeSwitchDirty: '저장하지 않은 변경이 있습니다. 편집 모드를 바꿀까요?',
     editorSaved: '저장했습니다',
     editorSavedTranslation: '{{lang}} 번역을 저장했습니다',
+    editorReadOnlySnapshot: '게시된 스냅샷 — 읽기 전용',
   },
 }

@@ -122,3 +122,68 @@ def test_delete_document_triggers_orphan_cleanup(db, doc_paths):
 
     assert not orphan.is_file()
     assert not (upload_dir / "ref.png").is_file()
+
+
+def test_orphan_upload_survives_unrelated_document_save(db, doc_paths):
+    """Upload referenced only in doc A must not be deleted when doc B is saved."""
+    docs_root, uploads_root = doc_paths
+    product = Product(name="Demo", slug="demo3", description=None)
+    db.add(product)
+    db.flush()
+    version = Version(
+        product_id=product.id,
+        name="Latest",
+        slug="latest",
+        is_latest=True,
+        is_published=False,
+    )
+    db.add(version)
+    db.flush()
+
+    docs_dir = docs_root / "demo3" / "latest"
+    docs_dir.mkdir(parents=True)
+    (docs_dir / "a.md").write_text("# A\n\n", encoding="utf-8")
+    (docs_dir / "b.md").write_text("# B\n\n", encoding="utf-8")
+
+    upload_dir = uploads_root / "demo3" / "latest"
+    upload_dir.mkdir(parents=True)
+    pending = upload_dir / "pending.png"
+    pending.write_bytes(b"1")
+
+    doc_a = Document(
+        version_id=version.id,
+        parent_id=None,
+        title="A",
+        slug="a",
+        file_path="demo3/latest/a.md",
+        sort_order=0,
+    )
+    doc_b = Document(
+        version_id=version.id,
+        parent_id=None,
+        title="B",
+        slug="b",
+        file_path="demo3/latest/b.md",
+        sort_order=1,
+    )
+    db.add_all([doc_a, doc_b])
+    db.commit()
+    db.refresh(doc_a)
+    db.refresh(doc_b)
+
+    document_service.update_document(
+        db,
+        doc_a,
+        DocumentUpdate(content=f"# A\n\n![p](/uploads/demo3/latest/{pending.name})\n"),
+        product_slug="demo3",
+        version_slug="latest",
+    )
+    document_service.update_document(
+        db,
+        doc_b,
+        DocumentUpdate(content="# B\n\nupdated\n"),
+        product_slug="demo3",
+        version_slug="latest",
+    )
+
+    assert pending.is_file()

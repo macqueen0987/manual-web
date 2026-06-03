@@ -17,6 +17,7 @@ import { useDocLocale } from '../hooks/useDocLocale'
 import { translate, withLocalePath } from '../i18n'
 import { isSecondaryContentLocale, localeDisplayLabel } from '../utils/contentLocale'
 import { useAuthStore } from '../stores/authStore'
+import { resolveVersionAndDoc, versionRouteSlug } from '../utils/productDocRouting'
 
 function mdHeading(level: 1 | 2 | 3, className: string) {
   return ({ children }: { children?: ReactNode }) => {
@@ -99,36 +100,6 @@ interface Version {
   name: string
   is_latest: boolean
   is_published: boolean
-}
-
-function versionRouteSlug(v: Version): string {
-  return v.is_latest ? 'latest' : v.slug
-}
-
-function resolveVersionAndDoc(
-  versions: Version[],
-  defaultVersionSlug: string,
-  versionSlugParam?: string,
-  maybeSegment?: string,
-  docSplat?: string,
-): { versionSlug: string; docSlug: string } {
-  const versionSlugs = new Set(versions.map(versionRouteSlug))
-
-  if (versionSlugParam !== undefined) {
-    return {
-      versionSlug: versionSlugParam,
-      docSlug: (docSplat || '').replace(/^\/+/, ''),
-    }
-  }
-
-  if (maybeSegment) {
-    if (versionSlugs.has(maybeSegment)) {
-      return { versionSlug: maybeSegment, docSlug: '' }
-    }
-    return { versionSlug: defaultVersionSlug, docSlug: maybeSegment }
-  }
-
-  return { versionSlug: defaultVersionSlug, docSlug: '' }
 }
 
 function contentHasH1(markdown: string): boolean {
