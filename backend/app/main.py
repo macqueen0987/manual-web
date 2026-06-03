@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -7,14 +8,28 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.v1 import auth, documents, media, products, search, setup, versions
 from app.core.config import get_settings
-from app.db.base import Base
-from app.db.session import engine
+from app.db.migrate import run_migrations
+from app.db.session import SessionLocal
+from app.middleware.logging import RequestLoggingMiddleware
+from app.services import search_service
 
 settings = get_settings()
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    try:
+        run_migrations()
+    except Exception as exc:
+        logging.getLogger(__name__).error(
+            "Alembic migration failed (%s); not falling back to create_all on startup",
+            exc,
+        )
+        raise
 
 
 def init_dirs():
@@ -22,10 +37,19 @@ def init_dirs():
     Path(settings.DOCS_DIR).mkdir(parents=True, exist_ok=True)
 
 
+def init_search_index():
+    db = SessionLocal()
+    try:
+        search_service.ensure_fts_populated(db)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_dirs()
     init_db()
+    init_search_index()
     yield
 
 
@@ -38,18 +62,17 @@ app = FastAPI(
     openapi_url=None,
 )
 
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://frontend:5173"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-# Static files for uploads
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
-# API Routers
 app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(products.router, prefix="/api/products", tags=["products"])
