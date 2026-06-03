@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import client from '../api/client'
+import AuthShell from '../components/layout/AuthShell'
+import Alert from '../components/ui/Alert'
 
 interface SetupPageProps {
   onComplete: () => void
@@ -25,95 +27,118 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
         product: { name: productName, slug: productSlug, description },
       })
       onComplete()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Setup failed')
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || '설정에 실패했습니다.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
-        <h1 className="mb-2 text-2xl font-bold">Initial Setup</h1>
-        <p className="mb-6 text-gray-600">Create your admin account and first product.</p>
+    <AuthShell
+      title="초기 설정"
+      subtitle="관리자 계정과 첫 제품을 만듭니다. 한 번만 진행하면 됩니다."
+      footer={null}
+    >
+      {error && (
+        <div className="mb-5">
+          <Alert>{error}</Alert>
+        </div>
+      )}
 
-        {error && <div className="mb-4 rounded bg-red-100 p-3 text-red-700">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <h2 className="text-lg font-semibold">Admin Account</h2>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <fieldset className="space-y-4">
+          <legend className="text-sm font-semibold text-ink">관리자 계정</legend>
           <div>
-            <label className="block text-sm font-medium">Email</label>
+            <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink">
+              이메일
+            </label>
             <input
+              id="email"
               type="email"
               required
-              className="mt-1 w-full rounded border px-3 py-2"
+              className="ui-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Password</label>
+            <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-ink">
+              비밀번호
+            </label>
             <input
+              id="password"
               type="password"
               required
-              className="mt-1 w-full rounded border px-3 py-2"
+              className="ui-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Full Name</label>
+            <label htmlFor="fullName" className="mb-1.5 block text-sm font-medium text-ink">
+              이름 (선택)
+            </label>
             <input
+              id="fullName"
               type="text"
-              className="mt-1 w-full rounded border px-3 py-2"
+              className="ui-input"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
             />
           </div>
+        </fieldset>
 
-          <h2 className="pt-4 text-lg font-semibold">First Product</h2>
+        <fieldset className="space-y-4 border-t border-stone-100 pt-6">
+          <legend className="text-sm font-semibold text-ink">첫 제품</legend>
           <div>
-            <label className="block text-sm font-medium">Product Name</label>
+            <label htmlFor="productName" className="mb-1.5 block text-sm font-medium text-ink">
+              제품명
+            </label>
             <input
+              id="productName"
               type="text"
               required
-              className="mt-1 w-full rounded border px-3 py-2"
+              className="ui-input"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Slug (URL)</label>
+            <label htmlFor="productSlug" className="mb-1.5 block text-sm font-medium text-ink">
+              Slug (URL)
+            </label>
             <input
+              id="productSlug"
               type="text"
               required
               pattern="[a-z0-9-]+"
-              className="mt-1 w-full rounded border px-3 py-2"
+              className="ui-input font-mono"
               value={productSlug}
               onChange={(e) => setProductSlug(e.target.value)}
               placeholder="my-product"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Description</label>
+            <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-ink">
+              설명 (선택)
+            </label>
             <textarea
-              className="mt-1 w-full rounded border px-3 py-2"
+              id="description"
+              className="ui-textarea"
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
+        </fieldset>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded bg-blue-600 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Setting up...' : 'Complete Setup'}
-          </button>
-        </form>
-      </div>
-    </div>
+        <button type="submit" disabled={loading} className="ui-btn-primary w-full py-2.5">
+          {loading ? '설정 중…' : '설정 완료'}
+        </button>
+      </form>
+    </AuthShell>
   )
 }

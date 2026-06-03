@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
+import AuthShell from '../components/layout/AuthShell'
+import Alert from '../components/ui/Alert'
 import { useAuthStore } from '../stores/authStore'
 
 export default function LoginPage() {
@@ -19,50 +21,59 @@ export default function LoginPage() {
       const res = await client.post('/auth/login', { email, password })
       setTokens(res.data.access_token, res.data.refresh_token)
       navigate('/admin')
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed')
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || '로그인에 실패했습니다. 이메일과 비밀번호를 확인하세요.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <div className="w-full max-w-sm rounded-lg bg-white p-8 shadow-lg">
-        <h1 className="mb-6 text-2xl font-bold">Admin Login</h1>
+    <AuthShell
+      title="관리자 로그인"
+      subtitle="제품 매뉴얼을 편집하려면 로그인하세요"
+    >
+      {error && (
+        <div className="mb-5">
+          <Alert>{error}</Alert>
+        </div>
+      )}
 
-        {error && <div className="mb-4 rounded bg-red-100 p-3 text-red-700">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium">Email</label>
-            <input
-              type="email"
-              required
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Password</label>
-            <input
-              type="password"
-              required
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded bg-blue-600 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
-      </div>
-    </div>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink">
+            이메일
+          </label>
+          <input
+            id="email"
+            type="email"
+            required
+            autoComplete="email"
+            className="ui-input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-ink">
+            비밀번호
+          </label>
+          <input
+            id="password"
+            type="password"
+            required
+            autoComplete="current-password"
+            className="ui-input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <button type="submit" disabled={loading} className="ui-btn-primary w-full py-2.5">
+          {loading ? '로그인 중…' : '로그인'}
+        </button>
+      </form>
+    </AuthShell>
   )
 }
