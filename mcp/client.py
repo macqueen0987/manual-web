@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import mimetypes
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -15,9 +17,15 @@ class ManualWebError(Exception):
 
 
 class ManualWebClient:
-    def __init__(self, base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str | None = None,
+        *,
+        http_client: httpx.Client | Any | None = None,
+    ) -> None:
         self.base_url = (base_url or os.environ.get("MANUAL_WEB_API_URL", DEFAULT_API_URL)).rstrip("/")
         self._token: str | None = None
+        self._http_client = http_client
 
     def login(self) -> None:
         email = os.environ.get("MANUAL_WEB_EMAIL")
@@ -26,11 +34,12 @@ class ManualWebClient:
             raise ManualWebError(
                 "Set MANUAL_WEB_EMAIL and MANUAL_WEB_PASSWORD env vars for write operations."
             )
-        res = httpx.post(
-            f"{self.base_url}/api/auth/login",
-            json={"email": email, "password": password},
-            timeout=30,
-        )
+        login_url = f"{self.base_url}/api/auth/login"
+        payload = {"email": email, "password": password}
+        if self._http_client is not None:
+            res = self._http_client.post(login_url, json=payload)
+        else:
+            res = httpx.post(login_url, json=payload, timeout=30)
         if res.status_code != 200:
             raise ManualWebError(f"Login failed ({res.status_code}): {res.text}")
         self._token = res.json()["access_token"]
@@ -43,13 +52,12 @@ class ManualWebClient:
         return {"Authorization": f"Bearer {self._token}"}
 
     def _request(self, method: str, path: str, *, auth: bool = False, **kwargs: Any) -> Any:
-        res = httpx.request(
-            method,
-            f"{self.base_url}{path}",
-            headers=self._headers(auth),
-            timeout=60,
-            **kwargs,
-        )
+        url = f"{self.base_url}{path}"
+        headers = self._headers(auth)
+        if self._http_client is not None:
+            res = self._http_client.request(method, url, headers=headers, **kwargs)
+        else:
+            res = httpx.request(method, url, headers=headers, timeout=60, **kwargs)
         if res.status_code >= 400:
             raise ManualWebError(f"{method} {path} → {res.status_code}: {res.text}")
         if res.status_code == 204 or not res.content:
@@ -59,11 +67,15 @@ class ManualWebClient:
     def list_products(self) -> list[dict]:
         return self._request("GET", "/api/products")
 
-    def list_versions(self, product_slug: str) -> list[dict]:
-        return self._request("GET", f"/api/products/{product_slug}/versions")
+    def list_versions(self, product_slug: str, *, auth: bool = False) -> list[dict]:
+        return self._request("GET", f"/api/products/{product_slug}/versions", auth=auth)
+
+    def list_versions_admin(self, product_slug: str) -> list[dict]:
+        """Includes latest / unpublished when authenticated as admin."""
+        return self.list_versions(product_slug, auth=True)
 
     def resolve_version_id(self, product_slug: str, version_slug: str = "latest") -> int:
-        versions = self.list_versions(product_slug)
+        versions = self.list_versions_admin(product_slug)
         for v in versions:
             if version_slug == "latest" and v.get("is_latest"):
                 return v["id"]
@@ -71,10 +83,13 @@ class ManualWebClient:
                 return v["id"]
         raise ManualWebError(f"Version '{version_slug}' not found for product '{product_slug}'")
 
-    def list_document_tree(self, product_slug: str, version_slug: str = "latest") -> list[dict]:
+    def list_document_tree(
+        self, product_slug: str, version_slug: str = "latest", *, auth: bool = True
+    ) -> list[dict]:
         return self._request(
             "GET",
             f"/api/products/{product_slug}/versions/{version_slug}/documents",
+            auth=auth,
         )
 
     def flatten_tree(self, tree: list[dict]) -> list[dict]:
@@ -90,10 +105,13 @@ class ManualWebClient:
                 return doc
         return None
 
-    def get_document(self, product_slug: str, doc_slug: str, version_slug: str = "latest") -> dict:
+    def get_document(
+        self, product_slug: str, doc_slug: str, version_slug: str = "latest", *, auth: bool = True
+    ) -> dict:
         return self._request(
             "GET",
             f"/api/products/{product_slug}/versions/{version_slug}/documents/{doc_slug}",
+            auth=auth,
         )
 
     def create_document(
@@ -140,6 +158,9 @@ class ManualWebClient:
             payload["parent_id"] = parent_id
         return self._request("PUT", f"/api/documents/{document_id}", auth=True, json=payload)
 
+    def delete_document(self, document_id: int) -> dict:
+        return self._request("DELETE", f"/api/documents/{document_id}", auth=True)
+
     def upsert_document(
         self,
         product_slug: str,
@@ -178,4 +199,57 @@ class ManualWebClient:
             content=content,
             parent_id=parent_id,
             sort_order=sort_order,
+        )
+
+    def upload_media(
+        self,
+        file_path: str | Path,
+        product_slug: str,
+        version_slug: str = "latest",
+    ) -> dict:
+        path = Path(file_path).expanduser().resolve()
+        if not path.is_file():
+            raise ManualWebError(f"File not found: {path}")
+        mime, _ = mimetypes.guess_type(path.name)
+        url = f"{self.base_url}/api/upload"
+        params = {"product_slug": product_slug, "version_slug": version_slug}
+        headers = self._headers(True)
+        with path.open("rb") as fh:
+            files = {"file": (path.name, fh, mime or "application/octet-stream")}
+            if self._http_client is not None:
+                res = self._http_client.post(url, headers=headers, params=params, files=files)
+            else:
+                res = httpx.post(url, headers=headers, params=params, files=files, timeout=120)
+        if res.status_code >= 400:
+            raise ManualWebError(f"POST /api/upload → {res.status_code}: {res.text}")
+        return res.json()
+
+    def list_media(
+        self,
+        product_slug: str | None = None,
+        version_slug: str | None = None,
+        *,
+        orphans_only: bool = False,
+    ) -> dict:
+        params: dict[str, Any] = {}
+        if product_slug:
+            params["product_slug"] = product_slug
+        if version_slug:
+            params["version_slug"] = version_slug
+        if orphans_only:
+            params["orphans_only"] = True
+        return self._request("GET", "/api/media", auth=True, params=params)
+
+    def delete_media(self, media_id: str) -> dict:
+        mid = media_id.strip().lstrip("/")
+        if mid.startswith("uploads/"):
+            mid = mid[len("uploads/") :]
+        return self._request("DELETE", f"/api/media/{mid}", auth=True)
+
+    def cleanup_orphan_media(self, product_slug: str, version_slug: str = "latest") -> dict:
+        return self._request(
+            "POST",
+            "/api/media/cleanup-orphans",
+            auth=True,
+            params={"product_slug": product_slug, "version_slug": version_slug},
         )

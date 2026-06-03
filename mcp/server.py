@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
 """Manual Web MCP server — import and manage markdown docs via AI tools.
 
-Cursor (.cursor/mcp.json):
-  "manual-web": {
-    "command": "python",
-    "args": ["mcp/server.py"],
-    "env": {
-      "MANUAL_WEB_API_URL": "http://localhost:8000",
-      "MANUAL_WEB_EMAIL": "admin@example.com",
-      "MANUAL_WEB_PASSWORD": "your-password"
-    }
-  }
+Docker (SSE, auto admin on first boot):
+  docker compose -f docker-compose.dev.yml up -d
+  docker compose -f docker-compose.dev.yml --profile mcp up -d mcp
+  Cursor: "url": "http://127.0.0.1:8001/sse"  (.cursor/mcp.json.example)
 
-Install deps: pip install -r mcp/requirements.txt
+Local stdio: pip install -r mcp/requirements.txt && python mcp/server.py
+  Run mcp/ensure_setup.py once if /api/setup/status is false.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -27,8 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mcp.server.fastmcp import FastMCP
 
 from client import ManualWebClient, ManualWebError
+from markdown_media import UPLOADABLE_EXTENSIONS, rewrite_markdown_local_images
 
-mcp = FastMCP("manual-web")
+mcp = FastMCP(
+    "manual-web",
+    host=os.environ.get("MCP_HOST", "127.0.0.1"),
+    port=int(os.environ.get("MCP_PORT", "8000")),
+)
 client = ManualWebClient()
 
 
@@ -42,6 +43,24 @@ def _title_from_markdown(content: str, fallback: str) -> str:
 
 def _slug_ok(slug: str) -> bool:
     return bool(re.fullmatch(r"[a-zA-Z0-9._-]+", slug))
+
+
+def _prepare_markdown_content(
+    content: str,
+    base_dir: Path,
+    product_slug: str,
+    version_slug: str,
+    *,
+    upload_local_images: bool,
+) -> tuple[str, list[dict]]:
+    if not upload_local_images:
+        return content, []
+
+    def _upload(local_path: Path) -> str:
+        meta = client.upload_media(local_path, product_slug, version_slug)
+        return meta["url"]
+
+    return rewrite_markdown_local_images(content, base_dir, _upload)
 
 
 @mcp.tool()
@@ -114,6 +133,101 @@ def update_document(
 
 
 @mcp.tool()
+def delete_document(document_id: int) -> str:
+    """Delete a document by ID (fails if it has child documents)."""
+    try:
+        return json.dumps(client.delete_document(document_id), ensure_ascii=False, indent=2)
+    except ManualWebError as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
+def upload_media(
+    file_path: str,
+    product_slug: str,
+    version_slug: str = "latest",
+) -> str:
+    """Upload an image or file (png, jpg, gif, webp, mp4, pdf, zip) to /uploads/{product}/{version}/."""
+    path = Path(file_path).expanduser().resolve()
+    if not path.is_file():
+        return json.dumps({"error": f"File not found: {path}"})
+    if path.suffix.lower() not in UPLOADABLE_EXTENSIONS:
+        return json.dumps(
+            {"error": f"Unsupported type '{path.suffix}'. Allowed: {sorted(UPLOADABLE_EXTENSIONS)}"}
+        )
+    try:
+        meta = client.upload_media(path, product_slug, version_slug)
+        return json.dumps(meta, ensure_ascii=False, indent=2)
+    except ManualWebError as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
+def upload_media_directory(
+    directory_path: str,
+    product_slug: str,
+    version_slug: str = "latest",
+) -> str:
+    """Upload all allowed media files under a directory (recursive)."""
+    root = Path(directory_path).expanduser().resolve()
+    if not root.is_dir():
+        return json.dumps({"error": f"Directory not found: {root}"})
+
+    uploaded: list[dict] = []
+    errors: list[dict] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in UPLOADABLE_EXTENSIONS:
+            continue
+        try:
+            meta = client.upload_media(path, product_slug, version_slug)
+            uploaded.append({"file": str(path), "url": meta["url"], "id": meta["id"]})
+        except ManualWebError as e:
+            errors.append({"file": str(path), "error": str(e)})
+
+    return json.dumps(
+        {"uploaded": len(uploaded), "failed": len(errors), "items": uploaded, "errors": errors},
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+@mcp.tool()
+def list_media(
+    product_slug: str,
+    version_slug: str = "latest",
+    orphans_only: bool = False,
+) -> str:
+    """List uploaded media for a product version."""
+    try:
+        data = client.list_media(product_slug, version_slug, orphans_only=orphans_only)
+        return json.dumps(data, ensure_ascii=False, indent=2)
+    except ManualWebError as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
+def delete_media(media_id: str) -> str:
+    """Delete one upload by id (e.g. product/latest/uuid.png)."""
+    try:
+        return json.dumps(client.delete_media(media_id), ensure_ascii=False, indent=2)
+    except ManualWebError as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
+def cleanup_orphan_media(product_slug: str, version_slug: str = "latest") -> str:
+    """Delete uploads not referenced in any document markdown for this version."""
+    try:
+        return json.dumps(
+            client.cleanup_orphan_media(product_slug, version_slug),
+            ensure_ascii=False,
+            indent=2,
+        )
+    except ManualWebError as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
 def import_markdown_file(
     file_path: str,
     product_slug: str,
@@ -121,8 +235,13 @@ def import_markdown_file(
     title: str | None = None,
     parent_slug: str | None = None,
     version_slug: str = "latest",
+    upload_local_images: bool = True,
 ) -> str:
-    """Import a single local .md file into Manual Web (create or overwrite by slug)."""
+    """Import a single local .md file into Manual Web (create or overwrite by slug).
+
+    When upload_local_images is true, ![alt](relative/path) refs next to the .md file
+    are uploaded and rewritten to /uploads/... URLs.
+    """
     path = Path(file_path).expanduser().resolve()
     if not path.is_file():
         return json.dumps({"error": f"File not found: {path}"})
@@ -134,6 +253,13 @@ def import_markdown_file(
     if not _slug_ok(slug):
         return json.dumps({"error": f"Invalid slug '{slug}' derived from filename"})
 
+    try:
+        content, media_uploads = _prepare_markdown_content(
+            content, path.parent, product_slug, version_slug, upload_local_images=upload_local_images
+        )
+    except ManualWebError as e:
+        return json.dumps({"error": str(e)})
+
     doc_title = title or _title_from_markdown(content, slug)
     try:
         doc = client.upsert_document(
@@ -144,7 +270,11 @@ def import_markdown_file(
             parent_slug=parent_slug,
             version_slug=version_slug,
         )
-        return json.dumps({"imported": str(path), "document": doc}, ensure_ascii=False, indent=2)
+        return json.dumps(
+            {"imported": str(path), "media_uploads": media_uploads, "document": doc},
+            ensure_ascii=False,
+            indent=2,
+        )
     except ManualWebError as e:
         return json.dumps({"error": str(e)})
 
@@ -155,8 +285,11 @@ def import_markdown_directory(
     product_slug: str,
     version_slug: str = "latest",
     parent_slug: str | None = None,
+    upload_local_images: bool = True,
 ) -> str:
     """Bulk-import all .md files under a directory. Folder structure maps to parent slugs.
+
+    Local image refs in each .md are resolved relative to that file's directory.
 
     Examples:
       docs/index.md           → slug index
@@ -193,6 +326,9 @@ def import_markdown_directory(
         title = _title_from_markdown(content, slug)
 
         try:
+            content, media_uploads = _prepare_markdown_content(
+                content, path.parent, product_slug, version_slug, upload_local_images=upload_local_images
+            )
             doc = client.upsert_document(
                 product_slug,
                 title=title,
@@ -201,7 +337,15 @@ def import_markdown_directory(
                 parent_slug=parent,
                 version_slug=version_slug,
             )
-            results.append({"file": str(path), "slug": slug, "parent": parent, "id": doc["id"]})
+            results.append(
+                {
+                    "file": str(path),
+                    "slug": slug,
+                    "parent": parent,
+                    "id": doc["id"],
+                    "media_uploads": len(media_uploads),
+                }
+            )
         except ManualWebError as e:
             errors.append({"file": str(path), "error": str(e)})
 
@@ -213,4 +357,5 @@ def import_markdown_directory(
 
 
 if __name__ == "__main__":
-    mcp.run()
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    mcp.run(transport=transport)  # type: ignore[arg-type]
