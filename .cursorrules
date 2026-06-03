@@ -4,11 +4,9 @@
 ## 🔒 파일 수정 규칙 (필수)
 
 Before editing any file, you MUST call the `claim_scope` tool with:
-- `workspace_id`: from `.agent-gate/workspace.toml` `[workspace].id` (required)
-- `agent`: "cursor"
 - `files`: list of files you plan to modify (use globs like `src/**/*.py` if needed)
-- `branch`: current git branch (if available)
-- `reason`: brief description of what you're about to do
+- `branch` / `reason`: optional
+- Do NOT pass `agent` or `workspace_id` — `.cursor/mcp.json` headers only (`manual-web`, `cursor`)
 
 If `claim_scope` returns a conflict:
 1. STOP editing immediately
@@ -16,12 +14,12 @@ If `claim_scope` returns a conflict:
 3. Either wait, ask the user to coordinate, or switch to non-conflicting files
 4. NEVER overwrite another agent's active work
 
-After completing your edits, you MUST call `release_scope` to free the claimed files.
+After completing your edits, call `release_scope` with `note` (optional `scope_id`; omit id to release all your active scopes). Session end also auto-releases via hooks.
 
 ## 🚦 빌드 / 테스트 규칙 (필수)
 
 Before running any build, test, or lint command that touches the codebase:
-1. Call `check_build_safety` with the files/regions the command will affect
+1. Call `check_build_safety` with the files/regions the command will affect (identity is from MCP headers only)
 2. If blocked, ask the user before proceeding
 3. If safe, proceed normally
 
