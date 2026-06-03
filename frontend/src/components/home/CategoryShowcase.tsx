@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Layers } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import type { Locale } from '../../i18n'
 import { translate, withLocalePath } from '../../i18n'
 import type { ShowcaseSlot } from '../../types/homeContent'
@@ -13,35 +13,14 @@ interface CategoryShowcaseProps {
   locale: Locale
 }
 
-function CategoryIllustration({
-  label,
-  imageUrl,
-}: {
-  label: string
-  imageUrl?: string | null
-}) {
-  if (imageUrl?.trim()) {
-    return (
-      <div className="flex h-full min-h-[12rem] w-full items-center justify-center overflow-hidden rounded-xl border border-stone-200 bg-white p-2 lg:min-h-[16rem]">
-        <img
-          src={imageUrl}
-          alt=""
-          className="max-h-full max-w-full rounded-lg object-contain"
-        />
-      </div>
-    )
-  }
-
+function CategoryIllustration({ imageUrl, alt }: { imageUrl: string; alt: string }) {
   return (
-    <div
-      className="flex h-full min-h-[12rem] w-full flex-col items-center justify-center rounded-xl border border-dashed border-stone-200 bg-gradient-to-br from-stone-50 to-surface-raised p-8 text-center lg:min-h-[16rem]"
-      aria-hidden
-    >
-      <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-muted text-accent">
-        <Layers size={28} strokeWidth={1.5} />
-      </span>
-      <span className="font-display text-lg font-semibold text-ink/40">{label}</span>
-      <span className="mt-1 text-xs text-ink-faint">Preview</span>
+    <div className="flex h-full min-h-[12rem] w-full items-center justify-center overflow-hidden rounded-xl border border-stone-200 bg-white p-2 lg:min-h-[16rem]">
+      <img
+        src={imageUrl}
+        alt={alt}
+        className="max-h-full max-w-full rounded-lg object-contain"
+      />
     </div>
   )
 }
@@ -64,6 +43,7 @@ export default function CategoryShowcase({
   const docsPath = primary
     ? withLocalePath(`/${primary.slug}`, locale)
     : '#home-explore'
+  const showcaseImage = slot.image_url?.trim() || null
 
   return (
     <section className="text-left" aria-labelledby="home-featured">
@@ -120,14 +100,18 @@ export default function CategoryShowcase({
           id="category-showcase-panel"
           role="tabpanel"
           aria-labelledby={`category-tab-${slot.id}`}
-          className="flex min-w-0 flex-1 flex-col lg:flex-row"
+          className={`flex min-w-0 flex-1 flex-col ${showcaseImage ? 'lg:flex-row' : ''}`}
         >
           <div className="flex min-w-0 flex-1 flex-col justify-between gap-6 p-6 sm:p-8 lg:p-10">
             <div className="min-w-0 text-left">
               <h3 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
                 {label}
               </h3>
-              <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted sm:text-base">
+              <p
+                className={`mt-3 text-sm leading-relaxed text-ink-muted sm:text-base ${
+                  showcaseImage ? 'max-w-xl' : 'max-w-none'
+                }`}
+              >
                 {detail}
               </p>
             </div>
@@ -146,9 +130,11 @@ export default function CategoryShowcase({
             </div>
           </div>
 
-          <div className="border-t border-stone-200 bg-stone-50/50 p-5 lg:w-[42%] lg:border-l lg:border-t-0 lg:p-6">
-            <CategoryIllustration label={label} imageUrl={slot.image_url} />
-          </div>
+          {showcaseImage ? (
+            <div className="border-t border-stone-200 bg-stone-50/50 p-5 lg:w-[42%] lg:border-l lg:border-t-0 lg:p-6">
+              <CategoryIllustration imageUrl={showcaseImage} alt={label} />
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

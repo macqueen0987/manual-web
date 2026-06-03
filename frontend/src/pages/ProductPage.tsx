@@ -340,8 +340,10 @@ export default function ProductPage() {
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex justify-center px-4 py-6 sm:px-6 lg:py-10 xl:px-8">
-            <div className="flex w-full max-w-[72rem] justify-center gap-10 xl:gap-14">
+            <div className="flex min-h-full flex-col">
+              <div className="flex flex-1 flex-col">
+                <div className="flex justify-center px-4 py-6 sm:px-6 lg:py-10 xl:px-8">
+                  <div className="flex w-full max-w-[72rem] justify-center gap-10 xl:gap-14">
               <article className="w-full min-w-0 max-w-[42rem] xl:max-w-[48rem]">
                 <Breadcrumbs items={contentBreadcrumbs} className="mb-4 text-xs sm:text-sm" />
 
@@ -412,10 +414,12 @@ export default function ProductPage() {
                   <TableOfContents content={document.content} locale={locale} />
                 </div>
               )}
+                  </div>
+                </div>
+              </div>
+              <PublicSiteFooter locale={locale} contentMaxWidth="docs" />
             </div>
           </div>
-          </div>
-          <PublicSiteFooter locale={locale} contentMaxWidth="docs" pinned />
         </main>
       </div>
     </div>

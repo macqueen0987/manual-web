@@ -63,10 +63,19 @@ def delete_uploaded_media(
 
 @router.post("/media/cleanup-orphans")
 def cleanup_orphan_uploads(
-    product_slug: str = Query(..., min_length=1),
-    version_slug: str = Query("latest", min_length=1),
+    product_slug: str | None = Query(None, min_length=1),
+    version_slug: str | None = Query(None, min_length=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user),
 ):
-    deleted = media_service.delete_orphan_uploads(product_slug, version_slug, db=db)
+    if version_slug and not product_slug:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="product_slug is required when version_slug is set",
+        )
+    deleted = media_service.delete_orphan_uploads_scoped(
+        product_slug=product_slug,
+        version_slug=version_slug,
+        db=db,
+    )
     return {"deleted": deleted, "count": len(deleted)}

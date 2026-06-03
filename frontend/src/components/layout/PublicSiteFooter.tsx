@@ -6,13 +6,11 @@ import SiteFooter from './SiteFooter'
 interface PublicSiteFooterProps {
   locale: Locale
   contentMaxWidth?: '6xl' | 'docs'
-  pinned?: boolean
 }
 
 export default function PublicSiteFooter({
   locale,
   contentMaxWidth = '6xl',
-  pinned = false,
 }: PublicSiteFooterProps) {
   const customHtml = useSiteFooter(locale)
   const { title } = useSiteBranding()
@@ -21,18 +19,14 @@ export default function PublicSiteFooter({
   if (customHtml) {
     return (
       <div
-        className={
-          pinned
-            ? 'site-footer-template sticky bottom-0 z-10 shrink-0 border-t border-stone-200/80 bg-surface/95 backdrop-blur-sm'
-            : 'site-footer-template shrink-0'
-        }
+        className="site-footer-template mt-auto shrink-0"
         dangerouslySetInnerHTML={{ __html: customHtml }}
       />
     )
   }
 
   return (
-    <SiteFooter contentMaxWidth={contentMaxWidth} pinned={pinned}>
+    <SiteFooter contentMaxWidth={contentMaxWidth}>
       <p className="text-center text-xs text-ink-muted sm:text-sm">
         {translate(locale, 'common.footerCopyright', { year, siteTitle: title })}
       </p>

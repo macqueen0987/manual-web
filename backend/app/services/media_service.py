@@ -229,6 +229,55 @@ def delete_orphan_uploads(
     return deleted
 
 
+def _discover_product_version_pairs(root: Path | None = None) -> list[tuple[str, str]]:
+    upload_root = root or _upload_root()
+    if not upload_root.is_dir():
+        return []
+    pairs: set[tuple[str, str]] = set()
+    for path in upload_root.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            rel = path.relative_to(upload_root)
+        except ValueError:
+            continue
+        parts = rel.parts
+        if len(parts) >= 3:
+            pairs.add((parts[0], parts[1]))
+    return sorted(pairs)
+
+
+def delete_orphan_uploads_scoped(
+    *,
+    product_slug: str | None = None,
+    version_slug: str | None = None,
+    db: "Session | None" = None,
+) -> list[str]:
+    """Delete orphan uploads for one version, all versions of a product, or every product."""
+    upload_root = _upload_root()
+    if not upload_root.is_dir():
+        return []
+
+    pairs: list[tuple[str, str]] = []
+    if product_slug and version_slug:
+        pairs = [(product_slug, version_slug)]
+    elif product_slug:
+        product_dir = upload_root / product_slug
+        if product_dir.is_dir():
+            for version_dir in sorted(product_dir.iterdir()):
+                if version_dir.is_dir():
+                    pairs.append((product_slug, version_dir.name))
+    else:
+        pairs = _discover_product_version_pairs(upload_root)
+
+    deleted: list[str] = []
+    for ps, vs in pairs:
+        deleted.extend(delete_orphan_uploads(ps, vs, db=db))
+    if deleted and not product_slug:
+        logger.info("Removed %d orphan upload(s) across all products", len(deleted))
+    return deleted
+
+
 def resolve_media_path(media_id: str) -> Path:
     """Resolve and validate a media id (relative path under uploads)."""
     root = _upload_root()

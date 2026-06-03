@@ -155,28 +155,13 @@ export default function MediaPage() {
   }
 
   const handleCleanupOrphans = async () => {
-    if (!productSlug) {
-      notify(translate(locale, 'admin.mediaCleanupNeedsProduct'), 'error')
-      return
-    }
-    const versionTargets = versionSlug
-      ? [versionSlug]
-      : versions.map((v) => v.slug)
-    if (versionTargets.length === 0) {
-      notify(translate(locale, 'admin.mediaCleanupNoVersions'), 'error')
-      return
-    }
-
     setCleaning(true)
     try {
-      let total = 0
-      for (const vs of versionTargets) {
-        const res = await client.post('/media/cleanup-orphans', null, {
-          params: { product_slug: productSlug, version_slug: vs },
-        })
-        total += res.data.count as number
-      }
-      notify(translate(locale, 'admin.orphansCleaned', { count: total }))
+      const params: Record<string, string> = {}
+      if (productSlug) params.product_slug = productSlug
+      if (versionSlug) params.version_slug = versionSlug
+      const res = await client.post('/media/cleanup-orphans', null, { params })
+      notify(translate(locale, 'admin.orphansCleaned', { count: res.data.count as number }))
       await loadMedia()
     } catch {
       notify(translate(locale, 'admin.cleanupFailed'), 'error')
@@ -238,11 +223,6 @@ export default function MediaPage() {
             variant="outline"
             size="sm"
             disabled={cleaning}
-            title={
-              productSlug
-                ? undefined
-                : translate(locale, 'admin.mediaCleanupNeedsProduct')
-            }
             onClick={() => void handleCleanupOrphans()}
           >
             {cleaning ? <Loader2 size={16} className="animate-spin" /> : null}
