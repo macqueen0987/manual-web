@@ -2,11 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-50 text-gray-900 antialiased;
+@layer base {
+  body {
+    @apply bg-surface font-sans text-ink antialiased;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: "Cascadia Code", ui-monospace, monospace;
+  }
+
+  ::selection {
+    @apply bg-accent-muted text-ink;
+  }
 }
 
-/* Toast UI Editor custom styles */
+@layer components {
+  .admin-input,
+  .ui-input {
+    @apply w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-ink shadow-sm transition-[border-color,box-shadow] duration-200 placeholder:text-ink-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20;
+  }
+
+  .ui-textarea {
+    @apply ui-input resize-y;
+  }
+
+  .admin-btn-primary,
+  .ui-btn-primary {
+    @apply inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/30 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .admin-btn-secondary,
+  .ui-btn-secondary {
+    @apply inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-ink transition-colors duration-200 hover:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-stone-200 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .admin-btn-danger,
+  .ui-btn-danger {
+    @apply inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800 transition-colors duration-200 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .ui-btn-ghost {
+    @apply inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted transition-colors duration-200 hover:bg-surface-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-stone-200;
+  }
+
+  .ui-link {
+    @apply font-medium text-accent transition-colors duration-200 hover:text-accent-hover hover:underline;
+  }
+
+  .ui-card {
+    @apply rounded-xl border border-stone-200 bg-surface-raised transition-shadow duration-200;
+    box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06), 0 0 0 1px rgba(28, 25, 23, 0.04);
+  }
+
+  .ui-card:hover {
+    box-shadow: 0 8px 30px rgba(28, 25, 23, 0.08), 0 0 0 1px rgba(28, 25, 23, 0.04);
+  }
+
+  .ui-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .ui-badge-accent {
+    @apply ui-badge bg-accent-muted text-accent-hover;
+  }
+
+  .ui-badge-muted {
+    @apply ui-badge bg-stone-100 text-ink-muted;
+  }
+
+}
+
 .toastui-editor-defaultUI {
   border-radius: 0.5rem;
 }

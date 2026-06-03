@@ -1,0 +1,5 @@
+/* highlight.js github theme sets .hljs { background: #fff } */
+.doc-prose pre code.hljs {
+  background-color: #f6f8fa !important;
+  background: #f6f8fa !important;
+}
