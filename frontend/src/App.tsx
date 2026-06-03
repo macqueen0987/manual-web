@@ -8,16 +8,21 @@ import HomePage from './pages/HomePage'
 import AdminPage from './pages/AdminPage'
 import ProductPage from './pages/ProductPage'
 import EditorPage from './pages/EditorPage'
+import MediaPage from './pages/MediaPage'
+import PageLoader from './components/ui/PageLoader'
+import { translate } from './i18n'
+import { useLocaleStore } from './stores/localeStore'
 
 function App() {
   const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
-  const { init, isAuthenticated } = useAuthStore()
+  const { validateSession, isAuthenticated } = useAuthStore()
+  const locale = useLocaleStore((s) => s.locale)
 
   useEffect(() => {
-    init()
+    void validateSession()
     checkSetup()
-  }, [])
+  }, [validateSession])
 
   const checkSetup = async () => {
     try {
@@ -30,13 +35,7 @@ function App() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-lg">Loading...</div>
-      </div>
-    )
-  }
+  if (loading) return <PageLoader label={translate(locale, 'common.starting')} />
 
   return (
     <Routes>
@@ -50,6 +49,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<HomePage />} />
           <Route path="/admin" element={isAuthenticated ? <AdminPage /> : <Navigate to="/login" />} />
+          <Route path="/admin/media" element={isAuthenticated ? <MediaPage /> : <Navigate to="/login" />} />
           <Route
             path="/admin/products/:productSlug/:versionSlug/editor/:docSlug"
             element={isAuthenticated ? <EditorPage /> : <Navigate to="/login" />}
