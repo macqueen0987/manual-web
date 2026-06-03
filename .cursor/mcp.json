@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "agent-gate": {
-      "url": "http://localhost:8765/mcp",
-      "transport": "sse"
-    }
-  }
-}
