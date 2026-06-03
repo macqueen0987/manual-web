@@ -1,3 +1,4 @@
+import filetype
 import logging
 import mimetypes
 import re
@@ -26,13 +27,14 @@ ALLOWED_EXTENSIONS = {
     ".jpeg",
     ".gif",
     ".webp",
+    ".svg",
     ".mp4",
     ".pdf",
     ".zip",
 }
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 VIDEO_EXTENSIONS = {".mp4"}
 FILE_EXTENSIONS = {".pdf", ".zip"}
 
@@ -62,6 +64,68 @@ def validate_size(content: bytes) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File size exceeds 50MB limit",
+        )
+
+
+_EXT_TO_MIME_KIND: dict[str, tuple[str | list[str], str]] = {
+    ".png": ("image/png", "image"),
+    ".jpg": ("image/jpeg", "image"),
+    ".jpeg": ("image/jpeg", "image"),
+    ".gif": ("image/gif", "image"),
+    ".webp": ("image/webp", "image"),
+    ".svg": ("image/svg+xml", "image"),
+    ".mp4": (["video/mp4", "video/quicktime", "video/x-matroska"], "video"),
+    ".pdf": ("application/pdf", "file"),
+    ".zip": ("application/zip", "file"),
+}
+
+
+def _validate_svg_content(content: bytes) -> None:
+    head = content[:2048].decode("utf-8", errors="ignore").strip().lower()
+    if not (head.startswith("<svg") or head.startswith("<?xml")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid SVG content",
+        )
+
+
+def validate_file_signature(content: bytes, ext: str) -> None:
+    if ext == ".svg":
+        _validate_svg_content(content)
+        return
+
+    kind = filetype.guess(content)
+    if kind is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to determine file type from content",
+        )
+
+    expected_mime, expected_kind = _EXT_TO_MIME_KIND.get(ext, (None, None))
+    if expected_mime is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+        )
+
+    # 확장자 불일치는 가장 확실한 차단 기준
+    if kind.extension != ext.lstrip("."):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File extension mismatch. Detected: .{kind.extension}, Expected: {ext}",
+        )
+
+    # MIME exact match 또는 list match
+    if isinstance(expected_mime, list):
+        if kind.mime not in expected_mime:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File content does not match extension. Detected: {kind.mime}",
+            )
+    elif kind.mime != expected_mime:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File content does not match extension. Detected: {kind.mime}, Expected: {expected_mime}",
         )
 
 
@@ -212,6 +276,8 @@ def save_upload(
 ) -> dict:
     validate_extension(original_filename)
     validate_size(content)
+    ext = Path(original_filename).suffix.lower()
+    validate_file_signature(content, ext)
 
     upload_dir = Path(settings.UPLOAD_DIR) / product_slug / version_slug
     upload_dir.mkdir(parents=True, exist_ok=True)
