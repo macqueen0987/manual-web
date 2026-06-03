@@ -1,7 +1,7 @@
 # 일반 페이지 점검 체크리스트
 
 > **대상:** 비로그인 또는 일반 사용자 (관리자 JWT **없음**)  
-> **환경:** `docker compose up` → http://localhost:5173
+> **환경:** `docker compose -f docker-compose.dev.yml up` → http://localhost:5173
 
 **점검자 / 일자:** _______________  
 **브라우저:** _______________  
