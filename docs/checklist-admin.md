@@ -71,6 +71,7 @@
 |---|------|-----------|-----|----------------|
 | 3.1 | 쇼케이스 탭 편집·저장 | `/api/site/home` 반영 | [ ] | UI 로드 [x], 저장 — |
 | 3.1b | 홈 히어로 HTML | `SITE_HOME_HERO_HTML_PATH*` + `/api/site/home-hero` | [ ] | 관리 UI 없음 · `.env`·`branding/` |
+| 3.1c | 공개 푸터 HTML | `SITE_FOOTER_HTML_PATH*` + `/api/site/footer` | [ ] | 관리 UI 없음 · `.env`·`branding/` |
 | 3.2 | 탭 최대 4개·빈 제목 미표시 | 홈과 일치 | [ ] | — |
 | 3.3 | 쇼케이스 이미지 업로드/붙여넣기 | `/uploads/_site/home/` | [ ] | — |
 | 3.4 | 공개 홈 (`/`) | 저장 내용·제품 카드 | [ ] | — |

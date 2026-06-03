@@ -6,9 +6,9 @@ from app.core.security import create_access_token, create_refresh_token, decode_
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RefreshRequest, Token
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, RefreshRequest, Token
 from app.schemas.user import UserOut
-from app.services.auth_service import authenticate_user
+from app.services.auth_service import authenticate_user, change_password
 from app.services.refresh_token_service import (
     is_refresh_token_valid,
     revoke_all_user_tokens,
@@ -98,3 +98,18 @@ def logout(
 @router.get("/me", response_model=UserOut)
 def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/change-password")
+def change_user_password(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _rate: None = rate_limit(max_calls=10, window_seconds=60, scope="change_password"),
+):
+    if not change_password(db, current_user, body.current_password, body.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    return {"message": "Password updated"}

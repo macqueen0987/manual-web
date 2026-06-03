@@ -20,7 +20,7 @@ export default function AdminEntryLink({ className }: AdminEntryLinkProps) {
   if (!hasSession) {
     return (
       <Link to="/login" className={className}>
-        {translate(locale, 'common.adminLogin')}
+        {translate(locale, 'common.login')}
       </Link>
     )
   }
@@ -28,11 +28,18 @@ export default function AdminEntryLink({ className }: AdminEntryLinkProps) {
   const accountLabel =
     user?.email?.trim() || translate(locale, 'admin.accountMenu')
 
+  const menuLinks = [
+    { to: '/account/password', label: translate(locale, 'account.changePassword') },
+  ]
+  if (user?.is_superuser) {
+    menuLinks.unshift({ to: '/admin', label: translate(locale, 'common.admin') })
+  }
+
   return (
     <AccountMenu
       label={accountLabel}
       onLogout={logout}
-      links={[{ to: '/admin', label: translate(locale, 'common.admin') }]}
+      links={menuLinks}
     />
   )
 }

@@ -130,6 +130,17 @@ docker compose -f docker-compose.dev.yml restart backend
 
 **예시 파일:** [branding/home-hero.ko.example.html](./branding/home-hero.ko.example.html)
 
+### 공개 페이지 푸터 HTML 템플릿
+
+| 변수 | 설명 |
+|------|------|
+| `SITE_FOOTER_HTML_PATH` | 공통 HTML (UTF-8, `<footer>` 전체) |
+| `SITE_FOOTER_HTML_PATH_KO` / `_EN` | 로케일별 override |
+
+미설정 시 홈·문서 페이지 하단에 `SITE_BRAND_TITLE`과 연도가 포함된 기본 copyright 문구가 표시됩니다.
+
+**예시 파일:** [branding/site-footer.ko.example.html](./branding/site-footer.ko.example.html)
+
 **파일 마운트 예시** — `docker-compose.dev.yml`의 `backend.volumes`에 추가:
 
 ```yaml

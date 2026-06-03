@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     SITE_HOME_HERO_HTML_PATH: str = ""
     SITE_HOME_HERO_HTML_PATH_KO: str = ""
     SITE_HOME_HERO_HTML_PATH_EN: str = ""
+    SITE_FOOTER_HTML_PATH: str = ""
+    SITE_FOOTER_HTML_PATH_KO: str = ""
+    SITE_FOOTER_HTML_PATH_EN: str = ""
 
     class Config:
         env_file = ".env"

@@ -71,8 +71,11 @@ export default function AdminLayout({
   )
 
   const accountMenuLinks = isEditor
-    ? []
-    : [{ to: '/', label: translate(locale, 'admin.navPublicDocs') }]
+    ? [{ to: '/account/password', label: translate(locale, 'account.changePassword') }]
+    : [
+        { to: '/', label: translate(locale, 'admin.navPublicDocs') },
+        { to: '/account/password', label: translate(locale, 'account.changePassword') },
+      ]
 
   return (
     <div

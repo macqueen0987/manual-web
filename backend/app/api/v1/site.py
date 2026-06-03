@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.site import HomeContent, HomeHeroTemplate, SiteBranding
-from app.services import brand_service, hero_template_service, site_service
+from app.schemas.site import HomeContent, HomeHeroTemplate, SiteBranding, SiteFooterTemplate
+from app.services import brand_service, footer_template_service, hero_template_service, site_service
 
 router = APIRouter()
 
@@ -18,6 +18,11 @@ def get_site_branding():
 @router.get("/home-hero", response_model=HomeHeroTemplate)
 def get_home_hero_template(locale: str | None = Query(None)):
     return hero_template_service.get_home_hero_template(locale or "")
+
+
+@router.get("/footer", response_model=SiteFooterTemplate)
+def get_site_footer_template(locale: str | None = Query(None)):
+    return footer_template_service.get_site_footer_template(locale or "")
 
 
 @router.get("/home", response_model=HomeContent)

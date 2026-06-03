@@ -4,6 +4,8 @@ import { useAuthStore } from './stores/authStore'
 import client from './api/client'
 import SetupPage from './pages/SetupPage'
 import LoginPage from './pages/LoginPage'
+import ChangePasswordPage from './pages/ChangePasswordPage'
+import SessionRoute from './components/auth/SessionRoute'
 import HomePage from './pages/HomePage'
 import AdminPage from './pages/AdminPage'
 import AdminHomePage from './pages/AdminHomePage'
@@ -56,6 +58,14 @@ function App() {
       {isSetupComplete && (
         <>
           <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/account/password"
+            element={
+              <SessionRoute>
+                <ChangePasswordPage />
+              </SessionRoute>
+            }
+          />
           <Route path="/" element={<HomePage />} />
           <Route
             path="/admin"

@@ -29,3 +29,12 @@ def create_user(db: Session, obj_in: UserCreate, is_superuser: bool = False) -> 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
     return db.query(User).filter(User.email == email).first()
+
+
+def change_password(db: Session, user: User, current_password: str, new_password: str) -> bool:
+    if not verify_password(current_password, user.hashed_password):
+        return False
+    user.hashed_password = get_password_hash(new_password)
+    db.add(user)
+    db.commit()
+    return True

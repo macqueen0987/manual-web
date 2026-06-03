@@ -2,7 +2,7 @@ export const en = {
   common: {
     home: 'Home',
     admin: 'Admin',
-    adminLogin: 'Admin sign in',
+    login: 'Sign in',
     close: 'Close',
     loading: 'Loading…',
     starting: 'Starting…',
@@ -13,6 +13,7 @@ export const en = {
     errorTitle: 'Something went wrong',
     errorDescription: 'The page could not be displayed. Try reloading or return home.',
     retry: 'Reload',
+    footerCopyright: '© {{year}} {{siteTitle}}. All rights reserved.',
   },
   docs: {
     searchPlaceholder: 'Search docs…',
@@ -247,6 +248,7 @@ export const en = {
     mediaProductColumn: 'Product',
     mediaVersionColumn: 'Version',
     mediaCleanupNeedsProduct: 'Select a product before cleaning up unused files',
+    mediaCleanupNoVersions: 'This product has no versions to clean up',
     orphansOnly: 'Unused files only',
     cleanupOrphans: 'Clean up unused files',
     orphansCleaned: 'Removed {{count}} unused file(s)',
@@ -267,6 +269,24 @@ export const en = {
     editorReadOnlyUnpublishedSnapshot: 'Unpublished snapshot — read only',
     versionUnpublishedSuffix: ' (not published)',
   },
+  account: {
+    loginTitle: 'Sign in',
+    loginSubtitle: 'Sign in to edit product manuals',
+    loginFailed: 'Sign in failed. Check your email and password.',
+    loggingIn: 'Signing in…',
+    changePassword: 'Change password',
+    changePasswordTitle: 'Change password',
+    changePasswordSubtitle: 'Enter your current password and choose a new one',
+    currentPassword: 'Current password',
+    newPassword: 'New password',
+    confirmPassword: 'Confirm new password',
+    changingPassword: 'Updating…',
+    passwordChanged: 'Password updated.',
+    passwordChangeFailed: 'Could not update password. Try again.',
+    wrongCurrentPassword: 'Current password is incorrect.',
+    passwordMismatch: 'New passwords do not match.',
+    passwordTooShort: 'New password must be at least 8 characters.',
+  },
 } as const
 
 export type Messages = {
@@ -277,4 +297,5 @@ export type Messages = {
   lang: Record<keyof typeof en.lang, string>
   home: Record<keyof typeof en.home, string>
   admin: Record<keyof typeof en.admin, string>
+  account: Record<keyof typeof en.account, string>
 }

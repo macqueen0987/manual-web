@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class LoginRequest(BaseModel):
@@ -15,6 +15,11 @@ class Token(BaseModel):
 class TokenPayload(BaseModel):
     sub: int | None = None
     type: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
 
 
 class RefreshRequest(BaseModel):

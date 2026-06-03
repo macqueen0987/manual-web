@@ -18,6 +18,7 @@ export type MessageKey =
   | `lang.${keyof Messages['lang']}`
   | `home.${keyof Messages['home']}`
   | `admin.${keyof Messages['admin']}`
+  | `account.${keyof Messages['account']}`
 
 export function isLocale(value: string | null | undefined): value is Locale {
   return value === 'en' || value === 'ko'

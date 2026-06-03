@@ -6,6 +6,7 @@ import { useHomeHero } from '../hooks/useHomeHero'
 import ExploreProductDirectory from '../components/home/ExploreProductDirectory'
 import client from '../api/client'
 import PublicHeader from '../components/layout/PublicHeader'
+import PublicSiteFooter from '../components/layout/PublicSiteFooter'
 import EmptyState from '../components/ui/EmptyState'
 import PageLoader from '../components/ui/PageLoader'
 import DocSearchCombobox from '../components/search/DocSearchCombobox'
@@ -88,6 +89,8 @@ export default function HomePage() {
           </>
         )}
       </main>
+
+      <PublicSiteFooter locale={locale} />
     </div>
   )
 }

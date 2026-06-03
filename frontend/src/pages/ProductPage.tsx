@@ -9,6 +9,7 @@ import DocsSidebar from '../components/layout/DocsSidebar'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
 import type { BreadcrumbItem } from '../components/layout/Breadcrumbs'
 import TableOfContents from '../components/docs/TableOfContents'
+import PublicSiteFooter from '../components/layout/PublicSiteFooter'
 import EmptyState from '../components/ui/EmptyState'
 import PageLoader from '../components/ui/PageLoader'
 import { headingToId } from '../utils/markdown'
@@ -337,7 +338,8 @@ export default function ProductPage() {
           />
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex justify-center px-4 py-6 sm:px-6 lg:py-10 xl:px-8">
             <div className="flex w-full max-w-[72rem] justify-center gap-10 xl:gap-14">
               <article className="w-full min-w-0 max-w-[42rem] xl:max-w-[48rem]">
@@ -412,6 +414,8 @@ export default function ProductPage() {
               )}
             </div>
           </div>
+          </div>
+          <PublicSiteFooter locale={locale} contentMaxWidth="docs" pinned />
         </main>
       </div>
     </div>

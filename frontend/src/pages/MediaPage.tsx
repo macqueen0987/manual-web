@@ -162,7 +162,10 @@ export default function MediaPage() {
     const versionTargets = versionSlug
       ? [versionSlug]
       : versions.map((v) => v.slug)
-    if (versionTargets.length === 0) return
+    if (versionTargets.length === 0) {
+      notify(translate(locale, 'admin.mediaCleanupNoVersions'), 'error')
+      return
+    }
 
     setCleaning(true)
     try {
@@ -234,7 +237,12 @@ export default function MediaPage() {
             type="button"
             variant="outline"
             size="sm"
-            disabled={!productSlug || cleaning}
+            disabled={cleaning}
+            title={
+              productSlug
+                ? undefined
+                : translate(locale, 'admin.mediaCleanupNeedsProduct')
+            }
             onClick={() => void handleCleanupOrphans()}
           >
             {cleaning ? <Loader2 size={16} className="animate-spin" /> : null}

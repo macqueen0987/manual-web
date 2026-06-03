@@ -12,6 +12,10 @@ class SiteBranding(BaseModel):
 class HomeHeroTemplate(BaseModel):
     html: str | None = Field(None, max_length=65536)
 
+
+class SiteFooterTemplate(BaseModel):
+    html: str | None = Field(None, max_length=65536)
+
 MAX_SHOWCASE_SLOTS = 4
 
 

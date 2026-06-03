@@ -7,8 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '../stores/authStore'
+import { translate } from '../i18n'
+import { useLocaleStore } from '../stores/localeStore'
 
 export default function LoginPage() {
+  const locale = useLocaleStore((s) => s.locale)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -28,7 +31,7 @@ export default function LoginPage() {
     } catch (err: unknown) {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || '로그인에 실패했습니다. 이메일과 비밀번호를 확인하세요.')
+      setError(detail || translate(locale, 'account.loginFailed'))
     } finally {
       setLoading(false)
     }
@@ -36,8 +39,8 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title="관리자 로그인"
-      subtitle="제품 매뉴얼을 편집하려면 로그인하세요"
+      title={translate(locale, 'account.loginTitle')}
+      subtitle={translate(locale, 'account.loginSubtitle')}
     >
       {error && (
         <div className="mb-5">
@@ -69,7 +72,7 @@ export default function LoginPage() {
           />
         </div>
         <Button type="submit" disabled={loading} className="w-full">
-          {loading ? '로그인 중…' : '로그인'}
+          {loading ? translate(locale, 'account.loggingIn') : translate(locale, 'common.login')}
         </Button>
       </form>
     </AuthShell>
