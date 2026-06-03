@@ -32,7 +32,12 @@ import {
   localeDisplayLabel,
   localeToApiParam,
 } from '../utils/contentLocale'
-import { isVersionEditable } from '../utils/versionEdit'
+import {
+  formatEditorReadOnlyBadge,
+  formatVersionOptionLabel,
+  isVersionEditable,
+  readOnlySnapshotBadgeClass,
+} from '../utils/versionEdit'
 
 interface Product {
   id: number
@@ -116,6 +121,9 @@ export default function EditorPage() {
       ? versions.find((v) => v.is_latest)
       : versions.find((v) => v.slug === selectedVersion)
   const canEdit = version ? isVersionEditable(version) : false
+  const readOnlyBadgeLabel = version
+    ? formatEditorReadOnlyBadge(version, (key) => translate(uiLocale, key))
+    : null
 
   const flattenTree = (nodes: DocNode[]): DocNode[] => {
     const result: DocNode[] = []
@@ -625,15 +633,16 @@ export default function EditorPage() {
           >
             {versions.map((v) => (
               <option key={v.id} value={v.slug}>
-                {v.name}
-                {v.is_published ? ' (게시됨)' : ''}
+                {formatVersionOptionLabel(v.name, v, (key) => translate(uiLocale, key))}
               </option>
             ))}
           </select>
 
-          {version && !canEdit && (
-            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-ink-muted">
-              {translate(uiLocale, 'admin.editorReadOnlySnapshot')}
+          {readOnlyBadgeLabel && version && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${readOnlySnapshotBadgeClass(version)}`}
+            >
+              {readOnlyBadgeLabel}
             </span>
           )}
 

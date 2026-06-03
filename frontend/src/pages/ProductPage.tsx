@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { docRemarkPlugins } from '../utils/markdownSanitize'
 import { Menu, X, FileText } from 'lucide-react'
 import client from '../api/client'
 import DocsTopBar from '../components/layout/DocsTopBar'
@@ -367,7 +367,7 @@ export default function ProductPage() {
                       data-color-mode="light"
                     >
                       <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
+                        remarkPlugins={docRemarkPlugins}
                         rehypePlugins={docContentRehypePlugins}
                         components={markdownComponents}
                       >

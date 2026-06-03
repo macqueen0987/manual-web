@@ -7,6 +7,7 @@ import './fonts.css'
 import 'highlight.js/styles/github.css'
 import './hljs-overrides.css'
 import '@uiw/react-markdown-preview/markdown.css'
+import 'remark-github-blockquote-alert/alert.css'
 import './doc-markdown.css'
 import './index.css'
 

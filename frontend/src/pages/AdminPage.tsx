@@ -9,6 +9,8 @@ import {
 import client from '../api/client'
 import AdminLayout from '../components/admin/AdminLayout'
 import CategoryCombobox from '../components/admin/CategoryCombobox'
+import ProductIconField from '../components/admin/ProductIconField'
+import ProductSidebarList from '../components/admin/ProductSidebarList'
 import AdminDialog from '../components/admin/AdminDialog'
 import { notify } from '@/lib/notify'
 import { useAuthStore } from '../stores/authStore'
@@ -18,12 +20,12 @@ import { useLocaleStore } from '../stores/localeStore'
 import {
   ADMIN_ONLY_CATEGORY,
   categoryDisplayLabel,
-  categoryGroupLabel,
   collectCategorySuggestions,
   groupProductsByCategory,
   isAdminOnlyCategory,
   type ProductWithCategory,
 } from '../utils/productCategories'
+import { sortOrderPatches } from '../utils/productSortOrder'
 import { slugifyProductName, slugifyVersionName } from '../utils/slugify'
 
 type Product = ProductWithCategory
@@ -59,7 +61,8 @@ export default function AdminPage() {
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editCategory, setEditCategory] = useState('')
-  const [editSortOrder, setEditSortOrder] = useState(0)
+  const [editIconUrl, setEditIconUrl] = useState<string | null>(null)
+  const [newIconUrl, setNewIconUrl] = useState<string | null>(null)
 
   const [renameVersionOpen, setRenameVersionOpen] = useState(false)
   const [renameVersionTarget, setRenameVersionTarget] = useState<Version | null>(null)
@@ -123,11 +126,13 @@ export default function AdminPage() {
         slug,
         description: newProductDesc || null,
         category: newProductCategory.trim() || null,
+        icon_url: newIconUrl,
       })
       setProductModalOpen(false)
       setNewProductName('')
       setNewProductDesc('')
       setNewProductCategory('')
+      setNewIconUrl(null)
       notify(translate(locale, 'admin.productCreated'))
       await loadData()
     } catch (err: unknown) {
@@ -144,7 +149,7 @@ export default function AdminPage() {
         name: editName,
         description: editDesc || null,
         category: editCategory.trim() || null,
-        sort_order: editSortOrder,
+        icon_url: editIconUrl,
       })
       setEditProductOpen(false)
       notify(translate(locale, 'admin.productSaved'))
@@ -279,7 +284,7 @@ export default function AdminPage() {
     setEditName(selected.name)
     setEditDesc(selected.description || '')
     setEditCategory(selected.category || '')
-    setEditSortOrder(selected.sort_order ?? 0)
+    setEditIconUrl(selected.icon_url ?? null)
     setEditProductOpen(true)
   }
 
@@ -306,6 +311,31 @@ export default function AdminPage() {
 
   const newVersionSlugPreview = slugifyVersionName(newVersionName)
   const publishSlugPreview = slugifyVersionName(publishName)
+  const newProductSlugPreview = slugifyProductName(newProductName)
+
+  const handleReorderProducts = async (
+    _categoryKey: string,
+    ordered: Product[],
+  ) => {
+    const patches = sortOrderPatches(ordered)
+    if (patches.length === 0) return
+
+    const patchMap = new Map(patches.map((p) => [p.id, p.sort_order]))
+    setProducts((prev) =>
+      prev.map((p) =>
+        patchMap.has(p.id) ? { ...p, sort_order: patchMap.get(p.id)! } : p,
+      ),
+    )
+
+    try {
+      await Promise.all(
+        patches.map((p) => client.put(`/products/${p.id}`, { sort_order: p.sort_order })),
+      )
+    } catch {
+      notify(translate(locale, 'admin.productReorderFailed'), 'error')
+      await loadData()
+    }
+  }
 
   return (
     <AdminLayout userEmail={user?.email} onLogout={handleLogout}>
@@ -347,47 +377,14 @@ export default function AdminPage() {
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {productGroups.map((group) => (
-                <div key={group.key || '__uncategorized'}>
-                  <p className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
-                    {categoryGroupLabel(group, locale)}
-                  </p>
-                  <ul className="space-y-1">
-                    {group.products.map((p) => {
-                      const isSelected = selected?.id === p.id
-                      const latest = (versions[p.id] || []).find((v) => v.is_latest)
-                      return (
-                        <li key={p.id}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedId(p.id)}
-                            className={`w-full rounded-lg px-3 py-3 text-left transition-colors ${
-                              isSelected
-                                ? 'bg-white shadow-card ring-1 ring-accent/20'
-                                : 'hover:bg-white/80'
-                            }`}
-                          >
-                            <p className="truncate font-medium text-ink">{p.name}</p>
-                            <p className="truncate text-xs text-ink-faint">/{p.slug}</p>
-                            {isAdminOnlyCategory(p.category) && (
-                              <p className="mt-1 text-xs font-medium text-amber-700">
-                                {translate(locale, 'admin.adminOnlyBadge')}
-                              </p>
-                            )}
-                            {latest && (
-                              <p className="mt-1 text-xs text-ink-muted">
-                                작업 중: {latest.name}
-                              </p>
-                            )}
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              ))}
-            </div>
+            <ProductSidebarList
+              groups={productGroups}
+              selectedId={selectedId}
+              versions={versions}
+              locale={locale}
+              onSelect={setSelectedId}
+              onReorder={handleReorderProducts}
+            />
           )}
         </div>
 
@@ -641,6 +638,13 @@ export default function AdminPage() {
               onChange={(e) => setNewProductDesc(e.target.value)}
             />
           </div>
+          <ProductIconField
+            productSlug={newProductSlugPreview}
+            value={newIconUrl}
+            onChange={setNewIconUrl}
+            disabled={!newProductSlugPreview}
+            onUploadError={(msg) => notify(msg, 'error')}
+          />
         </div>
       </AdminDialog>
 
@@ -691,17 +695,6 @@ export default function AdminPage() {
             </p>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-ink">
-              {translate(locale, 'admin.sortOrder')}
-            </label>
-            <input
-              type="number"
-              className="admin-input w-32"
-              value={editSortOrder}
-              onChange={(e) => setEditSortOrder(Number(e.target.value) || 0)}
-            />
-          </div>
-          <div>
             <label className="mb-1 block text-sm font-medium text-ink">설명</label>
             <textarea
               className="admin-input"
@@ -710,6 +703,14 @@ export default function AdminPage() {
               onChange={(e) => setEditDesc(e.target.value)}
             />
           </div>
+          {selected ? (
+            <ProductIconField
+              productSlug={selected.slug}
+              value={editIconUrl}
+              onChange={setEditIconUrl}
+              onUploadError={(msg) => notify(msg, 'error')}
+            />
+          ) : null}
         </div>
       </AdminDialog>
 

@@ -24,6 +24,9 @@ export default function MarkdownEditorPane({
         height={520}
         visibleDragbar={!readOnly}
         textareaProps={{ readOnly }}
+        previewOptions={{
+          className: 'doc-prose wmde-markdown max-w-none',
+        }}
       />
     </div>
   )

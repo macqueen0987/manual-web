@@ -69,6 +69,12 @@
   text-decoration: underline;
 }
 
+.doc-prose mark {
+  background-color: #fff8c5;
+  border-radius: 2px;
+  padding: 0 0.15em;
+}
+
 /* Lists — preflight strips list-style; custom bullets/numbers */
 .doc-prose ol {
   counter-reset: doc-ol;

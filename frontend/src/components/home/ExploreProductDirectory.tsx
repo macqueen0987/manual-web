@@ -173,7 +173,15 @@ function ProductExploreCard({
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-muted text-accent transition-colors group-hover:bg-accent group-hover:text-white"
             aria-hidden
           >
-            <BookOpen size={22} strokeWidth={1.5} />
+            {product.icon_url?.trim() ? (
+              <img
+                src={product.icon_url}
+                alt=""
+                className="h-7 w-7 object-contain"
+              />
+            ) : (
+              <BookOpen size={22} strokeWidth={1.5} />
+            )}
           </span>
           <div className="min-w-0 flex-1 pt-0.5">
             <h3 className="font-display text-base font-semibold leading-snug text-ink transition-colors group-hover:text-accent sm:text-lg">

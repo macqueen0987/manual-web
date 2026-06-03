@@ -1,4 +1,5 @@
 import { translate, type Locale } from '../i18n'
+import { sortProductsInGroup } from './productSortOrder'
 
 export interface ProductWithCategory {
   id: number
@@ -6,6 +7,7 @@ export interface ProductWithCategory {
   slug: string
   description: string | null
   category?: string | null
+  icon_url?: string | null
   sort_order?: number
 }
 
@@ -94,7 +96,7 @@ export function groupProductsByCategory<T extends ProductWithCategory>(
   return order.map((key) => ({
     key,
     label: key || null,
-    products: map.get(key)!,
+    products: sortProductsInGroup(map.get(key)!),
   }))
 }
 
