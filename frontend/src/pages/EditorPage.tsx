@@ -127,7 +127,9 @@ export default function EditorPage() {
 
   const flattenTree = (nodes: DocNode[]): DocNode[] => {
     const result: DocNode[] = []
-    for (const node of nodes) {
+    const stack = [...nodes].reverse()
+    while (stack.length) {
+      const node = stack.pop()!
       result.push({
         id: node.id,
         title: node.title,
@@ -135,17 +137,22 @@ export default function EditorPage() {
         parent_id: node.parent_id ?? null,
         children: node.children,
       })
-      if (node.children?.length) result.push(...flattenTree(node.children))
+      if (node.children?.length) {
+        for (let i = node.children.length - 1; i >= 0; i--) {
+          stack.push(node.children[i])
+        }
+      }
     }
     return result
   }
 
   const findNodeInTree = (nodes: DocNode[], id: number): DocNode | null => {
-    for (const node of nodes) {
+    const stack = [...nodes]
+    while (stack.length) {
+      const node = stack.pop()!
       if (node.id === id) return node
       if (node.children?.length) {
-        const found = findNodeInTree(node.children, id)
-        if (found) return found
+        stack.push(...node.children)
       }
     }
     return null

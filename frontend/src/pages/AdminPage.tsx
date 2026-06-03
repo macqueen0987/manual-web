@@ -328,9 +328,9 @@ export default function AdminPage() {
     )
 
     try {
-      await Promise.all(
-        patches.map((p) => client.put(`/products/${p.id}`, { sort_order: p.sort_order })),
-      )
+      for (const p of patches) {
+        await client.put(`/products/${p.id}`, { sort_order: p.sort_order })
+      }
     } catch {
       notify(translate(locale, 'admin.productReorderFailed'), 'error')
       await loadData()
