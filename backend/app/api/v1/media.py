@@ -4,7 +4,9 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.api.deps import get_current_admin_user
+from app.db.session import get_db
 from app.models.user import User
+from sqlalchemy.orm import Session
 from app.schemas.media import MediaListResponse, MediaOut
 from app.services import media_service
 
@@ -36,12 +38,14 @@ def list_uploaded_media(
     product_slug: str | None = Query(None, min_length=1),
     version_slug: str | None = Query(None, min_length=1),
     orphans_only: bool = Query(False, description="Only files not referenced in any document"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user),
 ):
     items = media_service.list_media(
         product_slug=product_slug,
         version_slug=version_slug,
         orphans_only=orphans_only,
+        db=db,
     )
     return MediaListResponse(items=[MediaOut(**m) for m in items], count=len(items))
 
@@ -61,7 +65,8 @@ def delete_uploaded_media(
 def cleanup_orphan_uploads(
     product_slug: str = Query(..., min_length=1),
     version_slug: str = Query("latest", min_length=1),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user),
 ):
-    deleted = media_service.delete_orphan_uploads(product_slug, version_slug)
+    deleted = media_service.delete_orphan_uploads(product_slug, version_slug, db=db)
     return {"deleted": deleted, "count": len(deleted)}

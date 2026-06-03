@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 _DEV_SECRET = "dev-local-secret-key-min-32-chars!!"
@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     DOCS_DIR: str = "data/docs"
     ALGORITHM: str = "HS256"
     CORS_ORIGINS: str = "http://localhost:5173,http://frontend:5173"
+    DEFAULT_LOCALE: str = Field(
+        default="ko",
+        validation_alias=AliasChoices("DEFAULT_LOCALE", "DEFAULT_CONTENT_LOCALE"),
+    )
 
     class Config:
         env_file = ".env"
@@ -29,6 +33,16 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_env(cls, value: str) -> str:
         return value.lower().strip()
+
+    @field_validator("DEFAULT_LOCALE")
+    @classmethod
+    def normalize_default_locale(cls, value: str) -> str:
+        raw = value.strip().lower()
+        if raw in ("ko", "kr", "korean"):
+            return "ko"
+        if raw in ("en", "eng", "english"):
+            return "en"
+        raise ValueError("DEFAULT_LOCALE must be en or ko")
 
     @model_validator(mode="after")
     def validate_secret_key(self) -> "Settings":

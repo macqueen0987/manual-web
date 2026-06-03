@@ -8,7 +8,7 @@ from app.core.config import get_settings
 from app.core.paths import remap_version_in_path
 from app.models.document import Document
 from app.models.version import Version
-from app.schemas.version import VersionCreate, VersionPublish
+from app.schemas.version import VersionCreate, VersionPublish, VersionUpdate
 
 settings = get_settings()
 
@@ -22,6 +22,39 @@ def get_versions(db: Session, product_id: int, skip: int = 0, limit: int = 100):
         .limit(limit)
         .all()
     )
+
+
+def get_versions_for_viewer(
+    db: Session,
+    product_id: int,
+    *,
+    include_unpublished: bool = False,
+    skip: int = 0,
+    limit: int = 100,
+):
+    query = db.query(Version).filter(Version.product_id == product_id)
+    if not include_unpublished:
+        query = query.filter(Version.is_published == True)
+    return query.order_by(Version.created_at.desc()).offset(skip).limit(limit).all()
+
+
+def version_visible_to_public(version: Version) -> bool:
+    return bool(version.is_published)
+
+
+def get_version_by_slug_for_viewer(
+    db: Session,
+    product_id: int,
+    slug: str,
+    *,
+    include_unpublished: bool = False,
+):
+    version = get_version_by_slug(db, product_id, slug)
+    if not version:
+        return None
+    if include_unpublished or version_visible_to_public(version):
+        return version
+    return None
 
 
 def get_version_by_slug(db: Session, product_id: int, slug: str):
@@ -167,6 +200,44 @@ def publish_latest(db: Session, product_id: int, product_slug: str, obj_in: Vers
     )
     db.refresh(published)
     return published
+
+
+def publish_existing_version(db: Session, db_obj: Version) -> Version:
+    """Mark a non-latest snapshot as published (visible to readers)."""
+    if db_obj.is_published:
+        raise ValueError("Version is already published")
+    if db_obj.is_latest:
+        raise ValueError("Use publish_latest to snapshot the working copy")
+    db_obj.is_published = True
+    db_obj.published_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
+
+
+def unpublish_version(db: Session, db_obj: Version) -> Version:
+    """Hide a published snapshot from public readers."""
+    if not db_obj.is_published:
+        raise ValueError("Version is not published")
+    if db_obj.is_latest:
+        raise ValueError("Cannot unpublish the working copy")
+    db_obj.is_published = False
+    db_obj.published_at = None
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
+
+
+def update_version(db: Session, db_obj: Version, obj_in: VersionUpdate) -> Version:
+    """Update display metadata. Working copy slug stays ``latest``."""
+    update_data = obj_in.model_dump(exclude_unset=True)
+    if not update_data:
+        return db_obj
+    if "name" in update_data:
+        db_obj.name = update_data["name"]
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
 
 
 def delete_version(db: Session, db_obj: Version, product_slug: str):

@@ -5,7 +5,8 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.paths import to_stored_doc_path
+from app.core.paths import localized_doc_path, to_stored_doc_path
+from app.services.document_service import DEFAULT_LOCALE
 from app.models.document import Document
 from app.models.product import Product
 from app.models.version import Version
@@ -24,7 +25,7 @@ def ensure_latest_version(db: Session, product: Product) -> Version:
 
     latest = Version(
         product_id=product.id,
-        name="latest",
+        name="작업 중",
         slug="latest",
         is_latest=True,
         is_published=False,
@@ -38,7 +39,8 @@ def ensure_latest_version(db: Session, product: Product) -> Version:
 def ensure_index_document(db: Session, product: Product, version: Version) -> Document:
     docs_dir = Path(settings.DOCS_DIR) / product.slug / "latest"
     docs_dir.mkdir(parents=True, exist_ok=True)
-    index_path = docs_dir / "index.md"
+    index_base = docs_dir / "index.md"
+    index_path = localized_doc_path(index_base, DEFAULT_LOCALE)
 
     existing = (
         db.query(Document)
@@ -47,6 +49,7 @@ def ensure_index_document(db: Session, product: Product, version: Version) -> Do
     )
     if existing:
         if not index_path.exists():
+            index_path.parent.mkdir(parents=True, exist_ok=True)
             index_path.write_text(
                 f"# {product.name}\n\nWelcome to the documentation.\n",
                 encoding="utf-8",
@@ -54,6 +57,7 @@ def ensure_index_document(db: Session, product: Product, version: Version) -> Do
         return existing
 
     if not index_path.exists():
+        index_path.parent.mkdir(parents=True, exist_ok=True)
         index_path.write_text(
             f"# {product.name}\n\nWelcome to the documentation.\n",
             encoding="utf-8",
@@ -64,7 +68,7 @@ def ensure_index_document(db: Session, product: Product, version: Version) -> Do
         parent_id=None,
         title="Home",
         slug="index",
-        file_path=to_stored_doc_path(index_path),
+        file_path=to_stored_doc_path(index_base),
         sort_order=0,
     )
     db.add(doc)

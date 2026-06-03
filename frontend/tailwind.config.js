@@ -1,16 +1,47 @@
 import typography from '@tailwindcss/typography'
+import tailwindcssAnimate from 'tailwindcss-animate'
 
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ['class'],
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
-      fontFamily: {
-        sans: ['"Noto Sans KR"', 'system-ui', 'sans-serif'],
-        display: ['"Noto Sans KR"', 'system-ui', 'sans-serif'],
-        mono: ['"Cascadia Code"', 'ui-monospace', 'monospace'],
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
       },
       colors: {
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
+        },
         surface: {
           DEFAULT: '#fafaf9',
           raised: '#ffffff',
@@ -27,6 +58,11 @@ export default {
           muted: '#ccfbf1',
         },
       },
+      fontFamily: {
+        sans: ['"Noto Sans KR"', 'system-ui', 'sans-serif'],
+        display: ['"Noto Sans KR"', 'system-ui', 'sans-serif'],
+        mono: ['"Cascadia Code"', 'ui-monospace', 'monospace'],
+      },
       boxShadow: {
         card: '0 1px 2px rgba(28, 25, 23, 0.06), 0 0 0 1px rgba(28, 25, 23, 0.04)',
         elevated: '0 8px 30px rgba(28, 25, 23, 0.08), 0 0 0 1px rgba(28, 25, 23, 0.04)',
@@ -39,5 +75,5 @@ export default {
       },
     },
   },
-  plugins: [typography],
+  plugins: [typography, tailwindcssAnimate],
 }

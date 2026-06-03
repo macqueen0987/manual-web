@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1 import auth, documents, media, products, search, setup, versions
+from app.api.v1 import auth, documents, media, products, search, setup, site, versions
 from app.core.config import get_settings
 from app.db.migrate import run_migrations
 from app.db.session import SessionLocal
@@ -80,6 +80,7 @@ app.include_router(versions.router, prefix="/api", tags=["versions"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(media.router, prefix="/api", tags=["media"])
 app.include_router(search.router, prefix="/api", tags=["search"])
+app.include_router(site.router, prefix="/api/site", tags=["site"])
 
 
 @app.get("/health")

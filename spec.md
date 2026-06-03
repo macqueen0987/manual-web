@@ -40,7 +40,7 @@
 - [x] **로그인**: 이메일/비밀번호로 JWT Access + Refresh Token 발급 (현재 localStorage; HttpOnly는 향후)
 - [x] **토큰 갱신**: `POST /api/auth/refresh` body `{ "token": "..." }` 또는 `{ "refresh_token": "..." }` + axios 인터셉터
 - [x] **로그아웃**: Refresh Token DB 폐기 + 클라이언트 삭제
-- [~] **권한 관리**: `is_superuser`로 Admin API 보호 (`deps.get_current_admin_user`); Viewer 역할 없음. **미발행 버전·latest 공개 열람 제한**은 스펙 정의됨·**미구현** (현재는 전 버전 공개 API)
+- [x] **권한 관리**: `is_superuser`로 Admin API 보호; 공개 API는 `is_published=true`만, 관리자 JWT 시 `latest`·미발행 포함 (`get_optional_admin_user`)
 - [x] **초기 설정 마법사**: `/setup` → 관리자 + 첫 제품 + `latest` 버전 + `index.md` + `documents` 행 생성
 
 ### 3.2 제품 관리 (Product) — 관리자 전용
@@ -53,8 +53,8 @@
 - [x] **버전 생성** (Admin): base 버전(또는 latest)에서 파일·문서 메타 복사 (`is_published=false`)
 - [x] **버전 발행 (Publish)** (Admin): `POST /api/products/{product_slug}/versions/publish` → `is_published=true`
 - [x] **버전 전환**: 공개 UI 버전 드롭다운 + URL
-- [~] **버전 목록 조회**: 공개 API (현재 전 버전 반환; 아래 **가시성** 규칙 미적용)
-- [ ] **버전 가시성 (미발행본)**:
+- [x] **버전 목록 조회**: 공개 API는 발행본만; 관리자 JWT 시 전 버전
+- [x] **버전 가시성 (미발행본)**:
   - **독자(비로그인·일반)**: `is_published=true`인 버전만 목록·URL·문서·검색 결과에 노출
   - **관리자** (`is_superuser`, JWT): `latest`·미발행 스냅샷(`is_published=false`) 포함 **전 버전** 열람·버전 선택기 표시 (미발행은 "초안" 등으로 구분 표시)
   - 미발행 버전 URL 직접 접근 시 비관리자 → **404** (또는 발행 버전으로 리다이렉트 정책 중 택일)
@@ -79,15 +79,15 @@ data/docs/
 - [x] **문서 생성**: MD 에디터 + 마크다운 파일 기록
 - [x] **문서 수정**: MD 에디터, 디스크 저장
 - [x] **문서 삭제**: 파일 + DB (에디터 UI)
-- [x] **문서 이동**: 에디터에서 `PUT /api/documents/{id}` (`parent_id`); `POST .../move` API는 있으나 FE 미사용; DnD 미구현
+- [x] **문서 이동**: DnD + `POST /documents/{id}/reposition`; 설정 패널도 reposition API 사용
 - [x] **문서 목록 조회**: 트리 구조 (공개 API)
 
 ### 3.5 미디어 첨부 (Media)
 - [x] **이미지 업로드**: 버튼·붙여넣기(`image/*`만) → `POST /api/upload` → 마크다운 삽입
-- [~] **동영상·파일 업로드 (백엔드만)**: `media.py`에서 `.mp4`, `.pdf`, `.zip` 확장자 허용; 에디터 UI·embed 없음
-- [ ] **동영상 첨부**: YouTube/Vimeo embed 또는 업로드 후 플레이어 마크다운 UX
-- [ ] **파일 첨부**: PDF/ZIP 업로드 버튼 및 다운로드 링크 삽입 UX
-- [ ] **미디어 관리**: `GET/DELETE /api/media` 및 관리 UI (현재 `POST /upload`만 구현)
+- [x] **동영상·파일 업로드**: `.mp4`, `.pdf`, `.zip` — 에디터 버튼 + 공개 렌더링
+- [x] **동영상 첨부**: YouTube/Vimeo embed + 업로드 MP4 플레이어
+- [x] **파일 첨부**: PDF/ZIP 업로드 및 다운로드 링크 삽입
+- [x] **미디어 관리**: `GET/DELETE /api/media` + `/admin/media` UI
 
 > **미디어 저장 경로:**
 ```
@@ -97,10 +97,10 @@ data/uploads/{product_slug}/{version_or_latest}/{uuid}.{ext}
 ### 3.6 문서 열람 (Public View)
 - [x] **제품 홈**: `index.md` 자동 로드
 - [x] **버전 선택기**: 상단 드롭다운
-- [~] **버전 선택 범위**: 독자는 **발행된 버전만**; 관리자 로그인 시 미발행·latest 포함 (§3.3 가시성 — **미구현**)
+- [x] **버전 선택 범위**: 독자는 **발행된 버전만**; 관리자 로그인 시 미발행·latest 포함 (§3.3)
 - [x] **사이드바 네비게이션**: 트리 + 하이라이트
 - [x] **문서 렌더링**: 마크다운 + 코드 하이라이트 + **TOC 우측 고정** (xl+)
-- [~] **검색**: 제목·본문 LIKE 스캔 API + UI (미발행 버전 제외 — **미구현**)
+- [x] **검색**: FTS API + UI (발행 버전만 인덱스·검색)
 - [x] **반응형**: 모바일 사이드바 토글
 
 ---
@@ -386,48 +386,51 @@ manual-web/
 ## 11. 개발 단계 (Roadmap)
 
 체크 표기: `[x]` 완료 · `[~]` 부분 · `[ ]` 미착수  
-**마지막 코드 대조**: 2026-06-03
+**마지막 코드 대조**: 2026-06-03 (Phase 빵꾸 마무리 작업 진행 중)
 
 ### 구현 현황 요약 (코드 기준)
 
 | Phase | 진행률 | 비고 |
 |-------|--------|------|
-| 1 Foundation | ~80% | HttpOnly 쿠키 미구현 |
-| 2 Core | ~75% | MD 에디터 완료; Toast 의존성만 설치 |
-| 3 Public | ~95% | MVP 공개 열람 완료 |
-| 4 Polish | ~45% | 검색·Docker OK; 미디어·전역 UX 미완 |
-| **합계** | **~72%** | Roadmap 항목 13/18 완료 + 2 부분 |
+| 1 Foundation | ~80% | HttpOnly **LAN 보류** (외부 노출 전 구현) |
+| 2 Core | **100%** | 듀얼 에디터 MD + Toast WYSIWYG |
+| 3 Public | **100%** | 미발행 가시성 §3.3 적용 |
+| 4 Polish | **~95%** | shadcn·ErrorBoundary·LAN prod Docker; HttpOnly 보류 |
+| **합계** | — | 아래 체크리스트 기준 |
 
 ### Phase 1: Foundation
 - [x] 프로젝트 스캐폴딩 (FastAPI + React + Tailwind)
-- [x] DB 모델 + Alembic `001` initial + legacy DB stamp (`db/migrate.py`)
+- [x] DB 모델 + Alembic `001`–`003` + legacy DB stamp (`db/migrate.py`)
 - [x] 초기 설정 마법사 API + UI
 - [x] JWT 인증 (로그인/갱신/서버 로그아웃·`refresh_tokens` 테이블)
-- [ ] HttpOnly 쿠키 (현재 `localStorage` + Bearer)
+- [~] HttpOnly 쿠키 — **보류**: LAN 전용; `localStorage` + Bearer 유지. 인터넷/VPN 노출 전 `Secure`+`SameSite`+HttpOnly 전환
 
 ### Phase 2: Core Features
 - [x] 제품 CRUD API + Admin UI (제품 수정은 `/admin` 모달)
 - [x] 버전 발행 + base/latest 복사로 신규 버전 (`version_service.publish_latest`)
-- [x] 문서 트리 CRUD + MD 에디터 (삭제·`parent_id` 이동)
+- [x] 문서 트리 CRUD + MD 에디터 (삭제·DnD reposition)
 - [x] 이미지 업로드 (product/version 경로, 붙여넣기)
 - [x] 마크다운 파일 I/O 연동
-- [ ] Toast UI WYSIWYG (`@toast-ui/react-editor` 미연동; `@uiw/react-md-editor` 사용 중)
+- [x] **듀얼 에디터**: `@uiw/react-md-editor` + `@toast-ui/react-editor` (관리자 모드 선택)
 
 ### Phase 3: Public View
 - [x] 제품/버전 선택 UI + URL 라우팅 (`ProductPage.resolveVersionAndDoc`)
 - [x] 사이드바 + 문서 렌더링 + TOC (`ProductPage` + `TableOfContents`, xl+)
 - [x] 반응형 레이아웃 (모바일 사이드바 토글)
-- [ ] **미발행 버전 가시성**: API·공개 UI·검색에서 `is_published=false` / `latest` 제외; 관리자 JWT 시 전 버전 열람 (§3.3)
+- [x] **미발행 버전 가시성**: API·공개 UI·검색에서 `is_published=false` / `latest` 제외; 관리자 JWT 시 전 버전 열람 (§3.3)
 
 ### Phase 4: Polish
-- [x] 풀텍스트 검색 (기본 LIKE, `ProductPage` UI)
-- [~] 동영상/파일 첨부 (업로드 API 확장자만; embed·에디터 UX 없음)
-- [ ] 미디어 관리 페이지 (`GET/DELETE /api/media` 없음)
-- [~] 에러 처리, 로딩 상태 (페이지별·Toast 알림; 전역 바운더리·낙관적 업데이트 없음)
-- [x] Docker compose 배포
+- [x] 풀텍스트 검색 (SQLite FTS5, `ProductPage` / `DocSearchCombobox`)
+- [x] 동영상/파일 첨부 (embed·업로드·공개 렌더링)
+- [x] 미디어 관리 페이지 (`GET/DELETE /api/media`, `/admin/media`)
+- [~] 에러 처리 (전역 ErrorBoundary; shadcn Sonner)
+- [x] Docker compose 개발 배포
+- [~] LAN prod 프로필 (`docker-compose.prod.yml`)
+- [~] shadcn/ui (Admin 1차)
 
 ### 테스트·품질 (로드맵 외)
-- [ ] `backend/tests/` 자동화 테스트 없음
+- [x] `backend/tests/` pytest (문서·버전·검색·미디어 등)
+- [~] Vitest (auth, slugify, markdown)
 
 ---
 
@@ -436,6 +439,6 @@ manual-web/
 - [ ] **DB 마이그레이션**: SQLite → PostgreSQL (동일 SQLAlchemy 설정으로 전환)
 - [ ] **캐싱 레이어**: Redis 도입 (세션, 토큰 블랙리스트, 검색 인덱스)
 - [ ] **검색 엔진**: Meilisearch 또는 Elasticsearch 연동
-- [ ] **i18n**: 다국어 지원 (영문/국문)
+- [~] **i18n**: UI·콘텐츠 locale `en`/`ko` 부분 구현 (`i18n/`, `contentLocale`)
 - [ ] **SSO**: Google Workspace / Azure AD 연동
 - [ ] **Git 연동**: 선택적으로 Git Push로 버전 발행

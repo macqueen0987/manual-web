@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import BrandMark from '../ui/BrandMark'
-import SearchField from '../ui/SearchField'
+import DocSearchCombobox from '../search/DocSearchCombobox'
 import LanguageSwitcher from '../ui/LanguageSwitcher'
+import AdminEntryLink from '../auth/AdminEntryLink'
 import { translate } from '../../i18n'
 import { useLocaleStore } from '../../stores/localeStore'
 import type { Locale } from '../../i18n'
@@ -10,12 +11,15 @@ import type { Locale } from '../../i18n'
 interface DocsTopBarProps {
   productName?: string
   productSlug?: string
-  versions: { id: number; slug: string; name: string; is_latest: boolean }[]
+  versions: {
+    id: number
+    slug: string
+    name: string
+    is_latest: boolean
+    is_published: boolean
+  }[]
   versionSlug: string
   onVersionChange: (slug: string) => void
-  searchQuery: string
-  onSearchQueryChange: (q: string) => void
-  onSearch: () => void
   onLocaleChange?: (locale: Locale) => void
   leading?: ReactNode
 }
@@ -26,9 +30,6 @@ export default function DocsTopBar({
   versions,
   versionSlug,
   onVersionChange,
-  searchQuery,
-  onSearchQueryChange,
-  onSearch,
   onLocaleChange,
   leading,
 }: DocsTopBarProps) {
@@ -68,6 +69,7 @@ export default function DocsTopBar({
           <option key={v.id} value={v.is_latest ? 'latest' : v.slug}>
             {v.name}
             {v.is_latest ? ` ${translate(locale, 'docs.versionLatest')}` : ''}
+            {!v.is_published ? ` ${translate(locale, 'docs.versionDraft')}` : ''}
           </option>
         ))}
       </select>
@@ -75,16 +77,13 @@ export default function DocsTopBar({
       <LanguageSwitcher onChange={onLocaleChange} />
 
       <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:max-w-xs md:max-w-sm lg:max-w-md">
-        <SearchField
-          value={searchQuery}
-          onChange={onSearchQueryChange}
-          onSubmit={onSearch}
+        <DocSearchCombobox
+          productSlug={productSlug}
           placeholder={translate(locale, 'docs.searchPlaceholder')}
           className="w-full"
+          panelAlign="end"
         />
-        <Link to="/login" className="ui-btn-secondary hidden shrink-0 py-1.5 text-sm lg:inline-flex">
-          {translate(locale, 'common.admin')}
-        </Link>
+        <AdminEntryLink className="ui-btn-secondary hidden shrink-0 py-1.5 text-sm lg:inline-flex" />
       </div>
     </header>
   )

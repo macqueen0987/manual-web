@@ -5,36 +5,46 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.paths import resolve_doc_path, to_stored_doc_path
+from app.services import media_service
+from app.core.paths import (
+    localized_doc_path,
+    normalize_base_doc_path,
+    resolve_doc_path,
+    to_stored_doc_path,
+)
 from app.models.document import Document
 from app.schemas.document import DocumentCreate, DocumentUpdate
 
 settings = get_settings()
-DEFAULT_LOCALE = "en"
+DEFAULT_LOCALE = settings.DEFAULT_LOCALE
 SUPPORTED_LOCALES = {"en", "ko"}
 
 
+def effective_locale(locale: str | None) -> str:
+    if locale and locale in SUPPORTED_LOCALES:
+        return locale
+    return DEFAULT_LOCALE
+
+
 def resolve_localized_path(base_path: Path, locale: str | None) -> Path:
-    """Resolve localized markdown file if present, else default path."""
-    if not locale or locale == DEFAULT_LOCALE:
-        return base_path
-
-    in_locale_dir = base_path.parent / locale / base_path.name
-    if in_locale_dir.is_file():
-        return in_locale_dir
-
-    suffixed = base_path.with_name(f"{base_path.stem}.{locale}{base_path.suffix}")
-    if suffixed.is_file():
-        return suffixed
-
-    return base_path
+    """Read path: ``version/{locale}/page.md``, with legacy root fallback."""
+    base = normalize_base_doc_path(base_path)
+    loc = effective_locale(locale)
+    localized = localized_doc_path(base, loc)
+    if localized.is_file():
+        return localized
+    if base.is_file():
+        return base
+    legacy_suffix = base.with_name(f"{base.stem}.{loc}{base.suffix}")
+    if legacy_suffix.is_file():
+        return legacy_suffix
+    return localized
 
 
 def localized_write_path(base_path: Path, locale: str | None) -> Path:
-    """Target path for writing content (creates locale subdir when needed)."""
-    if not locale or locale == DEFAULT_LOCALE:
-        return base_path
-    target = base_path.parent / locale / base_path.name
+    """Write path: always ``version/{locale}/page.md`` (no root files)."""
+    base = normalize_base_doc_path(base_path)
+    target = localized_doc_path(base, effective_locale(locale))
     target.parent.mkdir(parents=True, exist_ok=True)
     return target
 
@@ -60,7 +70,7 @@ def sync_markdown_title(content: str, title: str) -> str:
 
 
 def document_display_title(doc: Document, locale: str | None = None) -> str:
-    if locale and locale != DEFAULT_LOCALE and content_locale_available(doc, locale):
+    if locale and content_locale_available(doc, locale):
         content = read_document_content(doc, locale)
         heading = extract_title_from_markdown(content)
         if heading:
@@ -194,6 +204,26 @@ def build_tree(documents: list[Document], locale: str | None = None) -> list[dic
     return result
 
 
+def cleanup_orphan_uploads_for_version(
+    db: Session,
+    product_slug: str,
+    version_slug: str,
+) -> None:
+    """Remove uploads under this product/version not referenced in stored markdown."""
+    media_service.delete_orphan_uploads(product_slug, version_slug, db=db)
+
+
+def _neutral_file_path(
+    docs_dir: Path,
+    parent: Document | None,
+    slug: str,
+) -> Path:
+    if parent:
+        parent_base = normalize_base_doc_path(resolve_doc_path(parent.file_path))
+        return parent_base.parent / f"{slug}.md"
+    return docs_dir / f"{slug}.md"
+
+
 def create_document(
     db: Session,
     obj_in: DocumentCreate,
@@ -211,12 +241,8 @@ def create_document(
     docs_dir = Path(settings.DOCS_DIR) / product_slug / version_slug
     docs_dir.mkdir(parents=True, exist_ok=True)
 
-    if obj_in.parent_id:
-        parent = get_document(db, obj_in.parent_id)
-        parent_dir = resolve_doc_path(parent.file_path).parent
-        file_path = parent_dir / f"{slug}.md"
-    else:
-        file_path = docs_dir / f"{slug}.md"
+    parent = get_document(db, obj_in.parent_id) if obj_in.parent_id else None
+    file_path = _neutral_file_path(docs_dir, parent, slug)
 
     content = obj_in.content or ""
     if obj_in.title and not extract_title_from_markdown(content):
@@ -225,17 +251,12 @@ def create_document(
     write_path = localized_write_path(file_path, locale)
     write_path.write_text(content, encoding="utf-8")
 
-    if locale and locale != DEFAULT_LOCALE:
-        stored_path = to_stored_doc_path(file_path)
-    else:
-        stored_path = to_stored_doc_path(write_path)
-
     db_obj = Document(
         version_id=obj_in.version_id,
         parent_id=obj_in.parent_id,
         title=obj_in.title,
         slug=slug,
-        file_path=stored_path,
+        file_path=to_stored_doc_path(file_path),
         sort_order=sort_order,
     )
     db.add(db_obj)
@@ -244,6 +265,7 @@ def create_document(
     from app.services import search_service
 
     search_service.sync_document(db, db_obj.id)
+    cleanup_orphan_uploads_for_version(db, product_slug, version_slug)
     return db_obj
 
 
@@ -259,26 +281,18 @@ def update_document(
     content = update_data.pop("content", None)
     title = update_data.pop("title", None)
     req_locale = update_data.pop("locale", None)
-    active_locale = req_locale or locale
+    active_locale = effective_locale(req_locale or locale)
 
-    base_path = resolve_doc_path(db_obj.file_path)
-    is_default_locale = not active_locale or active_locale == DEFAULT_LOCALE
+    base_path = normalize_base_doc_path(resolve_doc_path(db_obj.file_path))
 
-    if content is not None or (title and not is_default_locale):
+    if content is not None or title:
         body = content if content is not None else read_document_content(db_obj, active_locale)
         if title:
             body = sync_markdown_title(body, title)
         write_path = localized_write_path(base_path, active_locale)
         write_path.write_text(body, encoding="utf-8")
-    elif title and is_default_locale:
-        default_content = read_document_content(db_obj, DEFAULT_LOCALE)
-        if default_content:
-            resolve_doc_path(db_obj.file_path).write_text(
-                sync_markdown_title(default_content, title),
-                encoding="utf-8",
-            )
 
-    if title and is_default_locale:
+    if title and active_locale == DEFAULT_LOCALE:
         db_obj.title = title
 
     if "parent_id" in update_data:
@@ -296,31 +310,48 @@ def update_document(
     from app.services import search_service
 
     search_service.sync_document(db, db_obj.id)
+    cleanup_orphan_uploads_for_version(db, product_slug, version_slug)
     return db_obj
 
 
-def delete_document(db: Session, db_obj: Document):
+def _unlink_doc_files(base_path: Path) -> None:
+    base = normalize_base_doc_path(base_path)
+    if base.is_file():
+        base.unlink()
+    legacy_suffixes = [
+        base.with_name(f"{base.stem}.{loc}{base.suffix}") for loc in SUPPORTED_LOCALES
+    ]
+    for path in legacy_suffixes:
+        if path.is_file():
+            path.unlink()
+    for loc in SUPPORTED_LOCALES:
+        localized = localized_doc_path(base, loc)
+        if localized.is_file():
+            localized.unlink()
+        loc_dir = base.parent / loc
+        if loc_dir.is_dir() and not any(loc_dir.iterdir()):
+            loc_dir.rmdir()
+
+
+def delete_document(
+    db: Session,
+    db_obj: Document,
+    *,
+    product_slug: str,
+    version_slug: str,
+):
     child = db.query(Document).filter(Document.parent_id == db_obj.id).first()
     if child:
         raise ValueError("Cannot delete a document that has child pages")
 
-    base_path = resolve_doc_path(db_obj.file_path)
-    if base_path.exists():
-        base_path.unlink()
-
-    for locale in SUPPORTED_LOCALES - {DEFAULT_LOCALE}:
-        localized = resolve_localized_path(base_path, locale)
-        if localized.is_file() and localized != base_path:
-            localized.unlink()
-        loc_dir = base_path.parent / locale
-        if loc_dir.is_dir() and not any(loc_dir.iterdir()):
-            loc_dir.rmdir()
+    _unlink_doc_files(resolve_doc_path(db_obj.file_path))
 
     db.delete(db_obj)
     db.commit()
     from app.services import search_service
 
     search_service.remove_document(db_obj.id)
+    cleanup_orphan_uploads_for_version(db, product_slug, version_slug)
     return db_obj
 
 
@@ -332,8 +363,11 @@ def read_document_content(db_obj: Document, locale: str | None = None) -> str:
 
 
 def content_locale_available(db_obj: Document, locale: str | None) -> bool:
-    if not locale or locale == DEFAULT_LOCALE:
+    loc = effective_locale(locale)
+    base = normalize_base_doc_path(resolve_doc_path(db_obj.file_path))
+    localized = localized_doc_path(base, loc)
+    if localized.is_file():
         return True
-    localized = resolve_localized_path(resolve_doc_path(db_obj.file_path), locale)
-    default = resolve_doc_path(db_obj.file_path)
-    return localized != default and localized.is_file()
+    if loc == DEFAULT_LOCALE and base.is_file():
+        return True
+    return base.with_name(f"{base.stem}.{loc}{base.suffix}").is_file()

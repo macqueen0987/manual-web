@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { detectBrowserLocale, type Locale } from '../i18n'
+import { DEFAULT_LOCALE, type Locale } from '../i18n'
 
 interface LocaleState {
   locale: Locale
@@ -14,7 +14,7 @@ function applyHtmlLang(locale: Locale) {
 export const useLocaleStore = create<LocaleState>()(
   persist(
     (set) => ({
-      locale: detectBrowserLocale(),
+      locale: DEFAULT_LOCALE,
       setLocale: (locale) => {
         applyHtmlLang(locale)
         set({ locale })

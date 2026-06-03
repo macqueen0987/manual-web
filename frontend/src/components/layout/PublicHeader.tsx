@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import SiteHeader from './SiteHeader'
 import type { BreadcrumbItem } from './Breadcrumbs'
 import LanguageSwitcher from '../ui/LanguageSwitcher'
-import { translate } from '../../i18n'
-import { useLocaleStore } from '../../stores/localeStore'
+import AdminEntryLink from '../auth/AdminEntryLink'
 
 interface PublicHeaderProps {
   breadcrumbs?: BreadcrumbItem[]
+  center?: ReactNode
   nav?: ReactNode
   actions?: ReactNode
   subheader?: ReactNode
@@ -17,31 +16,29 @@ interface PublicHeaderProps {
 
 export default function PublicHeader({
   breadcrumbs,
+  center,
   nav,
   actions,
   subheader,
   leading,
   contentMaxWidth = '6xl',
 }: PublicHeaderProps) {
-  const locale = useLocaleStore((s) => s.locale)
+  const defaultActions = (
+    <>
+      <LanguageSwitcher />
+      <AdminEntryLink className="ui-btn-secondary py-1.5 text-sm" />
+    </>
+  )
 
   return (
     <SiteHeader
       leading={leading}
       breadcrumbs={breadcrumbs}
+      center={center}
       nav={nav}
       subheader={subheader}
       contentMaxWidth={contentMaxWidth}
-      actions={
-        actions ?? (
-          <>
-            <LanguageSwitcher />
-            <Link to="/login" className="ui-btn-secondary py-1.5 text-sm">
-              {translate(locale, 'common.adminLogin')}
-            </Link>
-          </>
-        )
-      }
+      actions={actions ?? defaultActions}
     />
   )
 }

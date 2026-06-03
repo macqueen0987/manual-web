@@ -57,7 +57,9 @@ def test_slugify_title_ascii(db):
 def test_delete_document_rejects_when_children_exist(db):
     parent, _child = _seed_doc_tree(db)
     with pytest.raises(ValueError, match="child pages"):
-        document_service.delete_document(db, parent)
+        document_service.delete_document(
+            db, parent, product_slug="test", version_slug="latest"
+        )
 
 
 def test_reposition_rejects_move_under_descendant(db):

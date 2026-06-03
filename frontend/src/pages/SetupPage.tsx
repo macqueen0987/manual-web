@@ -2,6 +2,7 @@ import { useState } from 'react'
 import client from '../api/client'
 import AuthShell from '../components/layout/AuthShell'
 import Alert from '../components/ui/Alert'
+import { slugifyProductName } from '../utils/slugify'
 
 interface SetupPageProps {
   onComplete: () => void
@@ -12,7 +13,6 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [productName, setProductName] = useState('')
-  const [productSlug, setProductSlug] = useState('')
   const [description, setDescription] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -20,11 +20,16 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (!productName.trim()) {
+      setError('제품명을 입력해 주세요.')
+      return
+    }
+    const slug = slugifyProductName(productName)
     setLoading(true)
     try {
       await client.post('/setup/init', {
         admin: { email, password, full_name: fullName },
-        product: { name: productName, slug: productSlug, description },
+        product: { name: productName.trim(), slug, description },
       })
       onComplete()
     } catch (err: unknown) {
@@ -107,21 +112,6 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
             />
           </div>
           <div>
-            <label htmlFor="productSlug" className="mb-1.5 block text-sm font-medium text-ink">
-              Slug (URL)
-            </label>
-            <input
-              id="productSlug"
-              type="text"
-              required
-              pattern="[a-z0-9-]+"
-              className="ui-input font-mono"
-              value={productSlug}
-              onChange={(e) => setProductSlug(e.target.value)}
-              placeholder="my-product"
-            />
-          </div>
-          <div>
             <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-ink">
               설명 (선택)
             </label>
@@ -135,7 +125,11 @@ export default function SetupPage({ onComplete }: SetupPageProps) {
           </div>
         </fieldset>
 
-        <button type="submit" disabled={loading} className="ui-btn-primary w-full py-2.5">
+        <button
+          type="submit"
+          disabled={loading || !productName.trim()}
+          className="ui-btn-primary w-full py-2.5"
+        >
           {loading ? '설정 중…' : '설정 완료'}
         </button>
       </form>

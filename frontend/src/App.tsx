@@ -6,23 +6,27 @@ import SetupPage from './pages/SetupPage'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import AdminPage from './pages/AdminPage'
+import AdminHomePage from './pages/AdminHomePage'
 import ProductPage from './pages/ProductPage'
 import EditorPage from './pages/EditorPage'
 import MediaPage from './pages/MediaPage'
 import PageLoader from './components/ui/PageLoader'
+import ErrorBoundary from './components/ErrorBoundary'
+import AdminRoute from './components/auth/AdminRoute'
 import { translate } from './i18n'
 import { useLocaleStore } from './stores/localeStore'
 
 function App() {
   const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null)
-  const [loading, setLoading] = useState(true)
-  const { validateSession, isAuthenticated } = useAuthStore()
+  const [setupLoading, setSetupLoading] = useState(true)
+  const bootstrap = useAuthStore((s) => s.bootstrap)
+  const sessionReady = useAuthStore((s) => s.sessionReady)
   const locale = useLocaleStore((s) => s.locale)
 
   useEffect(() => {
-    void validateSession()
+    void bootstrap({ fetchUser: true })
     checkSetup()
-  }, [validateSession])
+  }, [bootstrap])
 
   const checkSetup = async () => {
     try {
@@ -31,32 +35,65 @@ function App() {
     } catch {
       setIsSetupComplete(false)
     } finally {
-      setLoading(false)
+      setSetupLoading(false)
     }
   }
 
-  if (loading) return <PageLoader label={translate(locale, 'common.starting')} />
+  if (setupLoading || !sessionReady) {
+    return <PageLoader label={translate(locale, 'common.starting')} />
+  }
 
   return (
+    <ErrorBoundary>
     <Routes>
       {!isSetupComplete && (
         <Route path="/setup" element={<SetupPage onComplete={checkSetup} />} />
       )}
       {!isSetupComplete && <Route path="*" element={<Navigate to="/setup" />} />}
-      
+
       {isSetupComplete && (
         <>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<HomePage />} />
-          <Route path="/admin" element={isAuthenticated ? <AdminPage /> : <Navigate to="/login" />} />
-          <Route path="/admin/media" element={isAuthenticated ? <MediaPage /> : <Navigate to="/login" />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/home"
+            element={
+              <AdminRoute>
+                <AdminHomePage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/media"
+            element={
+              <AdminRoute>
+                <MediaPage />
+              </AdminRoute>
+            }
+          />
           <Route
             path="/admin/products/:productSlug/:versionSlug/editor/:docSlug"
-            element={isAuthenticated ? <EditorPage /> : <Navigate to="/login" />}
+            element={
+              <AdminRoute>
+                <EditorPage />
+              </AdminRoute>
+            }
           />
           <Route
             path="/admin/products/:productSlug/:versionSlug/editor"
-            element={isAuthenticated ? <EditorPage /> : <Navigate to="/login" />}
+            element={
+              <AdminRoute>
+                <EditorPage />
+              </AdminRoute>
+            }
           />
           <Route path="/admin/editor" element={<Navigate to="/admin" replace />} />
           <Route path="/:productSlug/:versionSlug/*" element={<ProductPage />} />
@@ -67,6 +104,7 @@ function App() {
         </>
       )}
     </Routes>
+    </ErrorBoundary>
   )
 }
 

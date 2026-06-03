@@ -5,22 +5,28 @@ import {
   Pencil,
   Plus,
   Trash2,
-  Upload,
 } from 'lucide-react'
 import client from '../api/client'
 import AdminLayout from '../components/admin/AdminLayout'
-import Modal from '../components/admin/Modal'
-import Toast, { type ToastMessage } from '../components/admin/Toast'
+import CategoryCombobox from '../components/admin/CategoryCombobox'
+import AdminDialog from '../components/admin/AdminDialog'
+import { notify } from '@/lib/notify'
 import { useAuthStore } from '../stores/authStore'
+import { useEnsureUser } from '../components/auth/useEnsureUser'
 import { translate } from '../i18n'
 import { useLocaleStore } from '../stores/localeStore'
+import {
+  ADMIN_ONLY_CATEGORY,
+  categoryDisplayLabel,
+  categoryGroupLabel,
+  collectCategorySuggestions,
+  groupProductsByCategory,
+  isAdminOnlyCategory,
+  type ProductWithCategory,
+} from '../utils/productCategories'
+import { slugifyProductName, slugifyVersionName } from '../utils/slugify'
 
-interface Product {
-  id: number
-  name: string
-  slug: string
-  description: string | null
-}
+type Product = ProductWithCategory
 
 interface Version {
   id: number
@@ -30,20 +36,10 @@ interface Version {
   is_latest: boolean
 }
 
-function slugifyName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-}
-
 export default function AdminPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [versions, setVersions] = useState<Record<number, Version[]>>({})
-  const [user, setUser] = useState<{ email: string } | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [toast, setToast] = useState<ToastMessage | null>(null)
   const [loading, setLoading] = useState(true)
 
   const [productModalOpen, setProductModalOpen] = useState(false)
@@ -52,30 +48,38 @@ export default function AdminPage() {
   const [editProductOpen, setEditProductOpen] = useState(false)
 
   const [newProductName, setNewProductName] = useState('')
-  const [newProductSlug, setNewProductSlug] = useState('')
   const [newProductDesc, setNewProductDesc] = useState('')
-  const [autoSlug, setAutoSlug] = useState(true)
+  const [newProductCategory, setNewProductCategory] = useState('')
 
   const [newVersionName, setNewVersionName] = useState('')
-  const [newVersionSlug, setNewVersionSlug] = useState('')
   const [baseVersionId, setBaseVersionId] = useState<number | ''>('')
 
   const [publishName, setPublishName] = useState('')
-  const [publishSlug, setPublishSlug] = useState('')
 
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
+  const [editCategory, setEditCategory] = useState('')
+  const [editSortOrder, setEditSortOrder] = useState(0)
+
+  const [renameVersionOpen, setRenameVersionOpen] = useState(false)
+  const [renameVersionTarget, setRenameVersionTarget] = useState<Version | null>(null)
+  const [renameVersionName, setRenameVersionName] = useState('')
 
   const navigate = useNavigate()
-  const { logout } = useAuthStore()
+  const { logout, user } = useAuthStore()
   const locale = useLocaleStore((s) => s.locale)
+  useEnsureUser()
 
   const selected = products.find((p) => p.id === selectedId) ?? products[0] ?? null
-  const selectedVersions = selected ? versions[selected.id] ?? [] : []
-
-  const notify = (text: string, variant: 'success' | 'error' = 'success') => {
-    setToast({ text, variant })
-  }
+  const productGroups = groupProductsByCategory(products)
+  const categorySuggestions = collectCategorySuggestions(products)
+  const selectedVersions = selected
+    ? [...(versions[selected.id] ?? [])].sort((a, b) => {
+        if (a.is_published !== b.is_published) return a.is_published ? 1 : -1
+        if (a.is_latest !== b.is_latest) return a.is_latest ? -1 : 1
+        return 0
+      })
+    : []
 
   const loadData = async () => {
     try {
@@ -99,7 +103,6 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    client.get('/auth/me').then((res) => setUser(res.data)).catch(() => {})
     loadData()
   }, [])
 
@@ -109,16 +112,22 @@ export default function AdminPage() {
   }
 
   const handleCreateProduct = async () => {
+    const slug = slugifyProductName(newProductName)
+    if (!slug) {
+      notify(translate(locale, 'admin.productSlugInvalid'), 'error')
+      return
+    }
     try {
       await client.post('/products', {
-        name: newProductName,
-        slug: newProductSlug,
+        name: newProductName.trim(),
+        slug,
         description: newProductDesc || null,
+        category: newProductCategory.trim() || null,
       })
       setProductModalOpen(false)
       setNewProductName('')
-      setNewProductSlug('')
       setNewProductDesc('')
+      setNewProductCategory('')
       notify(translate(locale, 'admin.productCreated'))
       await loadData()
     } catch (err: unknown) {
@@ -134,6 +143,8 @@ export default function AdminPage() {
       await client.put(`/products/${selected.id}`, {
         name: editName,
         description: editDesc || null,
+        category: editCategory.trim() || null,
+        sort_order: editSortOrder,
       })
       setEditProductOpen(false)
       notify(translate(locale, 'admin.productSaved'))
@@ -161,16 +172,20 @@ export default function AdminPage() {
 
   const handleCreateVersion = async () => {
     if (!selected) return
+    const slug = slugifyVersionName(newVersionName)
+    if (!slug || slug === 'latest') {
+      notify(translate(locale, 'admin.versionSlugInvalid'), 'error')
+      return
+    }
     try {
       await client.post('/versions', {
         product_id: selected.id,
-        name: newVersionName,
-        slug: newVersionSlug,
-        base_version_id: baseVersionId || null,
+        name: newVersionName.trim(),
+        slug,
+        base_version_id: baseVersionId,
       })
       setVersionModalOpen(false)
       setNewVersionName('')
-      setNewVersionSlug('')
       setBaseVersionId('')
       notify(translate(locale, 'admin.versionCreated'))
       await loadData()
@@ -183,14 +198,18 @@ export default function AdminPage() {
 
   const handlePublish = async () => {
     if (!selected) return
+    const slug = slugifyVersionName(publishName)
+    if (!slug || slug === 'latest') {
+      notify(translate(locale, 'admin.versionSlugInvalid'), 'error')
+      return
+    }
     try {
       await client.post(`/products/${selected.slug}/versions/publish`, {
-        name: publishName,
-        slug: publishSlug,
+        name: publishName.trim(),
+        slug,
       })
       setPublishModalOpen(false)
       setPublishName('')
-      setPublishSlug('')
       notify(translate(locale, 'admin.published'))
       await loadData()
     } catch (err: unknown) {
@@ -200,10 +219,67 @@ export default function AdminPage() {
     }
   }
 
+  const handlePublishSnapshot = async (v: Version) => {
+    if (!confirm(`「${v.name}」을(를) 게시할까요? 독자에게 공개됩니다.`)) return
+    try {
+      await client.post(`/versions/${v.id}/publish`)
+      notify(translate(locale, 'admin.published'))
+      await loadData()
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      notify(detail || translate(locale, 'admin.publishFailed'), 'error')
+    }
+  }
+
+  const handleUnpublish = async (v: Version) => {
+    if (!confirm(`「${v.name}」 게시를 취소할까요? 독자에게 더 이상 보이지 않습니다.`)) return
+    try {
+      await client.post(`/versions/${v.id}/unpublish`)
+      notify(translate(locale, 'admin.unpublished'))
+      await loadData()
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      notify(detail || translate(locale, 'admin.unpublishFailed'), 'error')
+    }
+  }
+
+  const openEditor = (v: Version) => {
+    navigate(
+      `/admin/products/${selected!.slug}/${v.is_latest ? 'latest' : v.slug}/editor`,
+    )
+  }
+
+  const openRenameVersion = (v: Version) => {
+    setRenameVersionTarget(v)
+    setRenameVersionName(v.name === 'latest' ? translate(locale, 'admin.latestBadge') : v.name)
+    setRenameVersionOpen(true)
+  }
+
+  const handleRenameVersion = async () => {
+    if (!renameVersionTarget || !renameVersionName.trim()) return
+    try {
+      await client.put(`/versions/${renameVersionTarget.id}`, {
+        name: renameVersionName.trim(),
+      })
+      setRenameVersionOpen(false)
+      setRenameVersionTarget(null)
+      notify(translate(locale, 'admin.versionRenamed'))
+      await loadData()
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      notify(detail || translate(locale, 'admin.versionRenameFailed'), 'error')
+    }
+  }
+
   const openEditProduct = () => {
     if (!selected) return
     setEditName(selected.name)
     setEditDesc(selected.description || '')
+    setEditCategory(selected.category || '')
+    setEditSortOrder(selected.sort_order ?? 0)
     setEditProductOpen(true)
   }
 
@@ -213,9 +289,23 @@ export default function AdminPage() {
     const m = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
     setPublishName(`${y}.${m}.${day}`)
-    setPublishSlug(`${y}-${m}-${day}`)
     setPublishModalOpen(true)
   }
+
+  const openNewVersion = () => {
+    const latest = selectedVersions.find((v) => v.is_latest)
+    setBaseVersionId(latest?.id ?? '')
+    setNewVersionName('')
+    setVersionModalOpen(true)
+  }
+
+  const versionStatusSuffix = (v: Version) => {
+    if (v.is_latest) return ' · 작업 중'
+    return v.is_published ? ' · 게시됨' : ' · 게시되지 않음'
+  }
+
+  const newVersionSlugPreview = slugifyVersionName(newVersionName)
+  const publishSlugPreview = slugifyVersionName(publishName)
 
   return (
     <AdminLayout userEmail={user?.email} onLogout={handleLogout}>
@@ -257,33 +347,47 @@ export default function AdminPage() {
               </button>
             </div>
           ) : (
-            <ul className="space-y-1">
-              {products.map((p) => {
-                const isSelected = selected?.id === p.id
-                const latest = (versions[p.id] || []).find((v) => v.is_latest)
-                return (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(p.id)}
-                      className={`w-full rounded-lg px-3 py-3 text-left transition-colors ${
-                        isSelected
-                          ? 'bg-white shadow-card ring-1 ring-accent/20'
-                          : 'hover:bg-white/80'
-                      }`}
-                    >
-                      <p className="truncate font-medium text-ink">{p.name}</p>
-                      <p className="truncate text-xs text-ink-faint">/{p.slug}</p>
-                      {latest && (
-                        <p className="mt-1 text-xs text-ink-muted">
-                          작업 중: {latest.name}
-                        </p>
-                      )}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <div className="space-y-4">
+              {productGroups.map((group) => (
+                <div key={group.key || '__uncategorized'}>
+                  <p className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                    {categoryGroupLabel(group, locale)}
+                  </p>
+                  <ul className="space-y-1">
+                    {group.products.map((p) => {
+                      const isSelected = selected?.id === p.id
+                      const latest = (versions[p.id] || []).find((v) => v.is_latest)
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedId(p.id)}
+                            className={`w-full rounded-lg px-3 py-3 text-left transition-colors ${
+                              isSelected
+                                ? 'bg-white shadow-card ring-1 ring-accent/20'
+                                : 'hover:bg-white/80'
+                            }`}
+                          >
+                            <p className="truncate font-medium text-ink">{p.name}</p>
+                            <p className="truncate text-xs text-ink-faint">/{p.slug}</p>
+                            {isAdminOnlyCategory(p.category) && (
+                              <p className="mt-1 text-xs font-medium text-amber-700">
+                                {translate(locale, 'admin.adminOnlyBadge')}
+                              </p>
+                            )}
+                            {latest && (
+                              <p className="mt-1 text-xs text-ink-muted">
+                                작업 중: {latest.name}
+                              </p>
+                            )}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
@@ -299,6 +403,20 @@ export default function AdminPage() {
                 <div>
                   <h2 className="text-2xl font-semibold text-ink">{selected.name}</h2>
                   <p className="mt-1 font-mono text-sm text-ink-faint">/{selected.slug}</p>
+                  {selected.category?.trim() && (
+                    <p
+                      className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        isAdminOnlyCategory(selected.category)
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-accent-muted text-accent'
+                      }`}
+                    >
+                      {categoryDisplayLabel(selected.category, locale)}
+                      {isAdminOnlyCategory(selected.category)
+                        ? ` · ${translate(locale, 'admin.adminOnlyBadge')}`
+                        : null}
+                    </p>
+                  )}
                   {selected.description && (
                     <p className="mt-3 max-w-xl text-sm text-ink-muted">
                       {selected.description}
@@ -340,28 +458,19 @@ export default function AdminPage() {
               </div>
 
               <section>
-                <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-ink-faint">
                     버전
                   </h3>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setVersionModalOpen(true)}
-                      className="admin-btn-secondary py-1.5 text-xs"
-                    >
-                      <Plus size={14} />
-                      버전 복제
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openPublish}
-                      className="admin-btn-secondary py-1.5 text-xs"
-                    >
-                      <Upload size={14} />
-                      스냅샷 발행
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={openNewVersion}
+                    disabled={selectedVersions.length === 0}
+                    className="admin-btn-secondary py-1.5 text-xs"
+                  >
+                    <Plus size={14} />
+                    새 버전
+                  </button>
                 </div>
 
                 <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-card">
@@ -369,7 +478,6 @@ export default function AdminPage() {
                     <thead>
                       <tr className="border-b border-stone-100 bg-surface-muted/80 text-xs uppercase tracking-wider text-ink-faint">
                         <th className="px-4 py-3 font-medium">이름</th>
-                        <th className="px-4 py-3 font-medium">Slug</th>
                         <th className="px-4 py-3 font-medium">상태</th>
                         <th className="px-4 py-3 text-right font-medium">작업</th>
                       </tr>
@@ -377,54 +485,85 @@ export default function AdminPage() {
                     <tbody>
                       {selectedVersions.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-4 py-8 text-center text-ink-muted">
+                          <td colSpan={3} className="px-4 py-8 text-center text-ink-muted">
                             버전이 없습니다
                           </td>
                         </tr>
                       ) : (
                         selectedVersions.map((v) => (
                           <tr key={v.id} className="border-t border-stone-50">
-                            <td className="px-4 py-3 font-medium">{v.name}</td>
-                            <td className="px-4 py-3 font-mono text-xs text-ink-muted">
-                              {v.slug}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex flex-wrap gap-1.5">
-                                {v.is_latest && (
-                                  <span className="rounded-full bg-accent-muted px-2 py-0.5 text-xs font-medium text-accent-hover">
-                                    작업 중
-                                  </span>
-                                )}
-                                {v.is_published && (
-                                  <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-ink-muted">
-                                    발행됨
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {v.is_latest ? (
+                            <td className="px-4 py-3 font-medium">
+                              <span className="inline-flex items-center gap-1">
+                                {v.name}
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    navigate(
-                                      `/admin/products/${selected.slug}/latest/editor`,
-                                    )
-                                  }
+                                  onClick={() => openRenameVersion(v)}
+                                  className="inline-flex rounded p-0.5 text-accent transition-colors hover:bg-accent/10"
+                                  title={translate(locale, 'admin.renameVersion')}
+                                  aria-label={translate(locale, 'admin.renameVersion')}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={
+                                  v.is_latest
+                                    ? 'rounded-full bg-accent-muted px-2 py-0.5 text-xs font-medium text-accent-hover'
+                                    : v.is_published
+                                      ? 'rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-ink-muted'
+                                      : 'rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900'
+                                }
+                              >
+                                {v.is_latest
+                                  ? translate(locale, 'admin.workingCopyStatus')
+                                  : v.is_published
+                                    ? translate(locale, 'admin.publishedBadge')
+                                    : '게시되지 않음'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditor(v)}
                                   className="text-sm font-medium text-accent hover:underline"
                                 >
                                   편집
                                 </button>
-                              ) : (
-                                <a
-                                  href={`/${selected.slug}/${v.slug}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm text-ink-muted hover:text-ink hover:underline"
-                                >
-                                  보기
-                                </a>
-                              )}
+                                {v.is_published && (
+                                  <a
+                                    href={`/${selected.slug}/${v.slug}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-ink-muted hover:text-ink hover:underline"
+                                  >
+                                    보기
+                                  </a>
+                                )}
+                                {v.is_published ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUnpublish(v)}
+                                    className="text-sm text-ink-muted hover:text-ink hover:underline"
+                                  >
+                                    게시 취소
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      v.is_latest
+                                        ? openPublish()
+                                        : handlePublishSnapshot(v)
+                                    }
+                                    className="text-sm font-medium text-accent hover:underline"
+                                  >
+                                    게시하기
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -433,7 +572,8 @@ export default function AdminPage() {
                   </table>
                 </div>
                 <p className="mt-3 text-xs text-ink-faint">
-                  작업 중(latest)에서 편집한 뒤 스냅샷 발행으로 고정 버전을 만듭니다.
+                  새 버전으로 원하는 스냅샷을 복사해 만들 수 있습니다. 게시됨은 독자에게 공개되며,
+                  게시 취소로 비공개로 돌릴 수 있습니다.
                 </p>
               </section>
             </>
@@ -441,9 +581,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <Toast toast={toast} onDismiss={() => setToast(null)} />
-
-      <Modal
+      <AdminDialog
         open={productModalOpen}
         title="새 제품"
         onClose={() => setProductModalOpen(false)}
@@ -459,7 +597,7 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={handleCreateProduct}
-              disabled={!newProductName || !newProductSlug}
+              disabled={!newProductName.trim()}
               className="admin-btn-primary"
             >
               만들기
@@ -473,23 +611,26 @@ export default function AdminPage() {
             <input
               className="admin-input"
               value={newProductName}
-              onChange={(e) => {
-                setNewProductName(e.target.value)
-                if (autoSlug) setNewProductSlug(slugifyName(e.target.value))
-              }}
+              onChange={(e) => setNewProductName(e.target.value)}
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-ink">Slug</label>
-            <input
-              className="admin-input font-mono"
-              value={newProductSlug}
-              onChange={(e) => {
-                setAutoSlug(false)
-                setNewProductSlug(e.target.value)
-              }}
-              placeholder="my-product"
+            <label className="mb-1 block text-sm font-medium text-ink">
+              {translate(locale, 'admin.category')}
+            </label>
+            <CategoryCombobox
+              value={newProductCategory}
+              onChange={setNewProductCategory}
+              suggestions={categorySuggestions}
+              locale={locale}
+              placeholder={translate(locale, 'admin.categoryHint')}
             />
+            <p className="mt-1 text-xs text-ink-faint">
+              {translate(locale, 'admin.adminOnlyCategoryNote', {
+                name: translate(locale, 'admin.categoryAdminOnly'),
+                code: ADMIN_ONLY_CATEGORY,
+              })}
+            </p>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-ink">설명 (선택)</label>
@@ -501,9 +642,9 @@ export default function AdminPage() {
             />
           </div>
         </div>
-      </Modal>
+      </AdminDialog>
 
-      <Modal
+      <AdminDialog
         open={editProductOpen}
         title="제품 정보 수정"
         onClose={() => setEditProductOpen(false)}
@@ -532,6 +673,35 @@ export default function AdminPage() {
             />
           </div>
           <div>
+            <label className="mb-1 block text-sm font-medium text-ink">
+              {translate(locale, 'admin.category')}
+            </label>
+            <CategoryCombobox
+              value={editCategory}
+              onChange={setEditCategory}
+              suggestions={categorySuggestions}
+              locale={locale}
+              placeholder={translate(locale, 'admin.categoryHint')}
+            />
+            <p className="mt-1 text-xs text-ink-faint">
+              {translate(locale, 'admin.adminOnlyCategoryNote', {
+                name: translate(locale, 'admin.categoryAdminOnly'),
+                code: ADMIN_ONLY_CATEGORY,
+              })}
+            </p>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-ink">
+              {translate(locale, 'admin.sortOrder')}
+            </label>
+            <input
+              type="number"
+              className="admin-input w-32"
+              value={editSortOrder}
+              onChange={(e) => setEditSortOrder(Number(e.target.value) || 0)}
+            />
+          </div>
+          <div>
             <label className="mb-1 block text-sm font-medium text-ink">설명</label>
             <textarea
               className="admin-input"
@@ -541,11 +711,49 @@ export default function AdminPage() {
             />
           </div>
         </div>
-      </Modal>
+      </AdminDialog>
 
-      <Modal
+      <AdminDialog
+        open={renameVersionOpen}
+        title={translate(locale, 'admin.renameVersion')}
+        onClose={() => setRenameVersionOpen(false)}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setRenameVersionOpen(false)}
+              className="admin-btn-secondary"
+            >
+              {translate(locale, 'common.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={handleRenameVersion}
+              disabled={!renameVersionName.trim()}
+              className="admin-btn-primary"
+            >
+              {translate(locale, 'common.save')}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-ink">
+              {translate(locale, 'admin.versionDisplayName')}
+            </label>
+            <input
+              className="admin-input"
+              value={renameVersionName}
+              onChange={(e) => setRenameVersionName(e.target.value)}
+            />
+          </div>
+        </div>
+      </AdminDialog>
+
+      <AdminDialog
         open={versionModalOpen}
-        title="버전 복제"
+        title="새 버전"
         onClose={() => setVersionModalOpen(false)}
         footer={
           <>
@@ -559,7 +767,12 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={handleCreateVersion}
-              disabled={!newVersionName || !newVersionSlug}
+              disabled={
+                !newVersionName.trim() ||
+                !baseVersionId ||
+                !newVersionSlugPreview ||
+                newVersionSlugPreview === 'latest'
+              }
               className="admin-btn-primary"
             >
               만들기
@@ -569,18 +782,16 @@ export default function AdminPage() {
       >
         <div className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-ink">복사 원본</label>
+            <label className="mb-1 block text-sm font-medium text-ink">원본 버전</label>
             <select
               className="admin-input"
               value={baseVersionId}
-              onChange={(e) =>
-                setBaseVersionId(e.target.value === '' ? '' : Number(e.target.value))
-              }
+              onChange={(e) => setBaseVersionId(Number(e.target.value))}
             >
-              <option value="">latest (기본)</option>
               {selectedVersions.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name}
+                  {versionStatusSuffix(v)}
                 </option>
               ))}
             </select>
@@ -594,20 +805,12 @@ export default function AdminPage() {
               placeholder="2026.06.02-draft"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-ink">Slug</label>
-            <input
-              className="admin-input font-mono"
-              value={newVersionSlug}
-              onChange={(e) => setNewVersionSlug(e.target.value)}
-            />
-          </div>
         </div>
-      </Modal>
+      </AdminDialog>
 
-      <Modal
+      <AdminDialog
         open={publishModalOpen}
-        title="스냅샷 발행"
+        title="게시하기"
         onClose={() => setPublishModalOpen(false)}
         footer={
           <>
@@ -621,16 +824,20 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={handlePublish}
-              disabled={!publishName || !publishSlug}
+              disabled={
+                !publishName.trim() ||
+                !publishSlugPreview ||
+                publishSlugPreview === 'latest'
+              }
               className="admin-btn-primary"
             >
-              발행
+              게시
             </button>
           </>
         }
       >
         <p className="mb-4 text-sm text-ink-muted">
-          현재 작업 중(latest) 내용을 고정 버전으로 저장합니다. 발행 후에도 latest에서 계속
+          작업 중(latest) 내용을 게시된 스냅샷으로 저장합니다. 게시 후에도 작업 중에서 계속
           편집할 수 있습니다.
         </p>
         <div className="space-y-4">
@@ -640,18 +847,11 @@ export default function AdminPage() {
               className="admin-input"
               value={publishName}
               onChange={(e) => setPublishName(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-ink">Slug</label>
-            <input
-              className="admin-input font-mono"
-              value={publishSlug}
-              onChange={(e) => setPublishSlug(e.target.value)}
+              placeholder="2026.06.03"
             />
           </div>
         </div>
-      </Modal>
+      </AdminDialog>
     </AdminLayout>
   )
 }

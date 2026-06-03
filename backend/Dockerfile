@@ -1,8 +1,7 @@
-FROM python:3.13-slim
+FROM python:3.13-slim AS base
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
@@ -15,4 +14,8 @@ COPY . .
 
 EXPOSE 8000
 
+FROM base AS development
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+FROM base AS production
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

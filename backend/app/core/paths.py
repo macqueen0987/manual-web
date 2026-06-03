@@ -6,6 +6,8 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+LOCALE_DIR_NAMES = frozenset({"en", "ko"})
+
 
 def docs_root() -> Path:
     return Path(settings.DOCS_DIR).resolve()
@@ -18,8 +20,20 @@ def resolve_doc_path(file_path: str) -> Path:
     return docs_root() / path
 
 
+def normalize_base_doc_path(path: Path) -> Path:
+    """Strip locale segment so DB paths stay ``product/version/page.md``."""
+    if path.parent.name in LOCALE_DIR_NAMES:
+        return path.parent.parent / path.name
+    return path
+
+
+def localized_doc_path(path: Path, locale: str) -> Path:
+    base = normalize_base_doc_path(path)
+    return base.parent / locale / base.name
+
+
 def to_stored_doc_path(file_path: Path | str) -> str:
-    path = Path(file_path).resolve()
+    path = normalize_base_doc_path(Path(file_path).resolve())
     root = docs_root()
     try:
         rel = path.relative_to(root)

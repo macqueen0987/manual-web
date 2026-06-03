@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import AuthShell from '../components/layout/AuthShell'
 import Alert from '../components/ui/Alert'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useAuthStore } from '../stores/authStore'
 
 export default function LoginPage() {
@@ -11,7 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-  const { setTokens } = useAuthStore()
+  const { loginWithTokens, fetchUserProfile } = useAuthStore()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,7 +22,8 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const res = await client.post('/auth/login', { email, password })
-      setTokens(res.data.access_token, res.data.refresh_token)
+      loginWithTokens(res.data.access_token, res.data.refresh_token)
+      await fetchUserProfile()
       navigate('/admin')
     } catch (err: unknown) {
       const detail =
@@ -42,37 +46,31 @@ export default function LoginPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink">
-            이메일
-          </label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="email">이메일</Label>
+          <Input
             id="email"
             type="email"
             required
             autoComplete="email"
-            className="ui-input"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div>
-          <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-ink">
-            비밀번호
-          </label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="password">비밀번호</Label>
+          <Input
             id="password"
             type="password"
             required
             autoComplete="current-password"
-            className="ui-input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        <button type="submit" disabled={loading} className="ui-btn-primary w-full py-2.5">
+        <Button type="submit" disabled={loading} className="w-full">
           {loading ? '로그인 중…' : '로그인'}
-        </button>
+        </Button>
       </form>
     </AuthShell>
   )

@@ -1,0 +1,34 @@
+# LAN production overlay — use with base compose:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    environment:
+      - APP_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-dev-local-secret-key-min-32-chars!!}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
+    volumes:
+      - ./backend/data:/app/data
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE: ''
+    ports:
+      - '${FRONTEND_PORT:-80}:80'
+    volumes: []
+    depends_on:
+      backend:
+        condition: service_healthy

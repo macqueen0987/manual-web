@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin_user
-from app.db.session import get_db
+from app.api.deps import get_current_admin_user, get_optional_admin_user
 from app.models.user import User
+from app.core.product_visibility import require_product_for_viewer
+from app.db.session import get_db
 from app.schemas.product import ProductCreate, ProductOut, ProductUpdate
 from app.schemas.version import VersionOut
 from app.services import product_service, version_service
@@ -16,13 +17,19 @@ def list_products(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
+    admin: User | None = Depends(get_optional_admin_user),
 ):
-    return product_service.get_products(db, skip=skip, limit=limit)
+    return product_service.get_products(
+        db, skip=skip, limit=limit, include_admin_only=admin is not None
+    )
 
 
 @router.get("/with-versions")
-def list_products_with_versions(db: Session = Depends(get_db)):
-    products = product_service.get_products(db)
+def list_products_with_versions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),
+):
+    products = product_service.get_products(db, include_admin_only=True)
     return [
         {
             "product": ProductOut.model_validate(product),
@@ -36,11 +43,13 @@ def list_products_with_versions(db: Session = Depends(get_db)):
 
 
 @router.get("/{slug}", response_model=ProductOut)
-def get_product(slug: str, db: Session = Depends(get_db)):
+def get_product(
+    slug: str,
+    db: Session = Depends(get_db),
+    admin: User | None = Depends(get_optional_admin_user),
+):
     product = product_service.get_product_by_slug(db, slug)
-    if not product:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-    return product
+    return require_product_for_viewer(product, admin)
 
 
 @router.post("", response_model=ProductOut, status_code=status.HTTP_201_CREATED)

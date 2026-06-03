@@ -3,15 +3,22 @@ import mimetypes
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
 from fastapi import HTTPException, status
 
 from app.core.config import get_settings
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+
+SITE_MEDIA_PRODUCT_SLUG = "_site"
+SITE_MEDIA_VERSION_SLUG = "home"
 
 ALLOWED_EXTENSIONS = {
     ".png",
@@ -92,25 +99,46 @@ def extract_media_ids_from_text(text: str) -> set[str]:
     return ids
 
 
-def collect_referenced_media_ids(product_slug: str, version_slug: str) -> set[str]:
-    docs_dir = _docs_dir(product_slug, version_slug)
-    if not docs_dir.is_dir():
-        return set()
+def _collect_site_home_media_ids(db: "Session") -> set[str]:
+    from app.services import site_service
 
+    content = site_service.get_home_content(db)
+    return extract_media_ids_from_text(content.model_dump_json())
+
+
+def collect_referenced_media_ids(
+    product_slug: str,
+    version_slug: str,
+    *,
+    db: "Session | None" = None,
+) -> set[str]:
     referenced: set[str] = set()
-    for md_path in docs_dir.rglob("*.md"):
-        try:
-            text = md_path.read_text(encoding="utf-8")
-        except OSError:
-            logger.warning("Could not read markdown file for media scan: %s", md_path)
-            continue
-        referenced.update(extract_media_ids_from_text(text))
+    docs_dir = _docs_dir(product_slug, version_slug)
+    if docs_dir.is_dir():
+        for md_path in docs_dir.rglob("*.md"):
+            try:
+                text = md_path.read_text(encoding="utf-8")
+            except OSError:
+                logger.warning("Could not read markdown file for media scan: %s", md_path)
+                continue
+            referenced.update(extract_media_ids_from_text(text))
+    if (
+        product_slug == SITE_MEDIA_PRODUCT_SLUG
+        and version_slug == SITE_MEDIA_VERSION_SLUG
+        and db is not None
+    ):
+        referenced.update(_collect_site_home_media_ids(db))
     return referenced
 
 
-def delete_orphan_uploads(product_slug: str, version_slug: str) -> list[str]:
-    """Delete upload files under product/version not referenced in any markdown."""
-    referenced = collect_referenced_media_ids(product_slug, version_slug)
+def delete_orphan_uploads(
+    product_slug: str,
+    version_slug: str,
+    *,
+    db: "Session | None" = None,
+) -> list[str]:
+    """Delete upload files under product/version not referenced in docs or site content."""
+    referenced = collect_referenced_media_ids(product_slug, version_slug, db=db)
     upload_dir = _upload_dir(product_slug, version_slug)
     if not upload_dir.is_dir():
         return []
@@ -199,14 +227,19 @@ def list_media(
     product_slug: str | None = None,
     version_slug: str | None = None,
     orphans_only: bool = False,
+    db: "Session | None" = None,
 ) -> list[dict]:
     root = _upload_root()
     if not root.exists():
         return []
 
-    referenced: set[str] | None = None
-    if product_slug and version_slug:
-        referenced = collect_referenced_media_ids(product_slug, version_slug)
+    ref_cache: dict[tuple[str, str], set[str]] = {}
+
+    def referenced_ids(ps: str, vs: str) -> set[str]:
+        key = (ps, vs)
+        if key not in ref_cache:
+            ref_cache[key] = collect_referenced_media_ids(ps, vs, db=db)
+        return ref_cache[key]
 
     items: list[dict] = []
     for path in root.rglob("*"):
@@ -220,7 +253,9 @@ def list_media(
             continue
         if version_slug and meta["version_slug"] != version_slug:
             continue
-        is_referenced = referenced is not None and meta["id"] in referenced
+        is_referenced = meta["id"] in referenced_ids(
+            meta["product_slug"], meta["version_slug"]
+        )
         meta["referenced"] = is_referenced
         if orphans_only and is_referenced:
             continue

@@ -1,4 +1,7 @@
 import axios from 'axios'
+import { clearTokens, getAccessToken, refresh, loadTokens } from '../auth/sessionService'
+import { isAccessTokenExpired } from '../utils/jwt'
+import { useAuthStore } from '../stores/authStore'
 
 const client = axios.create({
   baseURL: '/api',
@@ -8,7 +11,7 @@ const client = axios.create({
 })
 
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
+  const token = getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -21,26 +24,33 @@ client.interceptors.response.use(
     const originalRequest = error.config
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
-        try {
-          const res = await axios.post('/api/auth/refresh', {
-            token: refreshToken,
-            refresh_token: refreshToken,
-          })
-          localStorage.setItem('access_token', res.data.access_token)
-          localStorage.setItem('refresh_token', res.data.refresh_token)
-          originalRequest.headers.Authorization = `Bearer ${res.data.access_token}`
+      if (loadTokens()?.refresh) {
+        const tokens = await refresh()
+        const active =
+          tokens ??
+          (() => {
+            const stored = loadTokens()
+            return stored && !isAccessTokenExpired(stored.access) ? stored : null
+          })()
+        if (active) {
+          originalRequest.headers.Authorization = `Bearer ${active.access}`
+          useAuthStore.getState().syncFromStorage()
           return client(originalRequest)
-        } catch {
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('refresh_token')
+        }
+        clearTokens()
+        useAuthStore.setState({
+          accessToken: null,
+          refreshToken: null,
+          user: null,
+          hasSession: false,
+        })
+        if (window.location.pathname.startsWith('/admin')) {
           window.location.href = '/login'
         }
       }
     }
     return Promise.reject(error)
-  }
+  },
 )
 
 export default client

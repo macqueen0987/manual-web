@@ -1,26 +1,23 @@
+import { resolveDefaultLocale } from '../config/defaultLocale'
 import { en, type Messages } from './locales/en'
 import { ko } from './locales/ko'
 
 export type Locale = 'en' | 'ko'
 
-export const SUPPORTED_LOCALES: Locale[] = ['en', 'ko']
-export const DEFAULT_LOCALE: Locale = 'en'
+export const DEFAULT_LOCALE: Locale = resolveDefaultLocale()
+export const SUPPORTED_LOCALES: Locale[] =
+  DEFAULT_LOCALE === 'ko' ? ['ko', 'en'] : ['en', 'ko']
 
 const messages: Record<Locale, Messages> = { en, ko }
 
 export type MessageKey =
   | `common.${keyof Messages['common']}`
   | `docs.${keyof Messages['docs']}`
+  | `search.${keyof Messages['search']}`
+  | `quickLinks.${keyof Messages['quickLinks']}`
   | `lang.${keyof Messages['lang']}`
   | `home.${keyof Messages['home']}`
   | `admin.${keyof Messages['admin']}`
-
-export function detectBrowserLocale(): Locale {
-  if (typeof navigator === 'undefined') return DEFAULT_LOCALE
-  const lang = navigator.language.toLowerCase()
-  if (lang.startsWith('ko')) return 'ko'
-  return 'en'
-}
 
 export function isLocale(value: string | null | undefined): value is Locale {
   return value === 'en' || value === 'ko'

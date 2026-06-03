@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, FileText, Plus } from 'lucide-react'
 import { useCallback, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { translate } from '../../i18n'
+import { Button } from '@/components/ui/button'
 import { useLocaleStore } from '../../stores/localeStore'
 
 export interface DocNode {
@@ -381,14 +382,10 @@ export default function DocTreeNav({
         <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
           {translate(locale, 'admin.pages')}
         </h2>
-        <button
-          type="button"
-          onClick={onNewPage}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent-muted"
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={onNewPage} className="h-8 gap-1 text-accent">
           <Plus size={14} />
           {translate(locale, 'admin.newPage')}
-        </button>
+        </Button>
       </div>
       {docs.length === 0 ? (
         wrapNav(

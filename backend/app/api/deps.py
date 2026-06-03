@@ -53,3 +53,26 @@ def get_current_admin_user(current_user: User = Depends(get_current_user)) -> Us
             detail="Admin access required",
         )
     return current_user
+
+
+def get_optional_admin_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Return the admin user when a valid superuser access token is sent; else None."""
+    if not credentials:
+        return None
+    payload = decode_token(credentials.credentials)
+    if not payload or payload.get("type") != "access":
+        return None
+    user_id = payload.get("sub")
+    if user_id is None:
+        return None
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active or not user.is_superuser:
+        return None
+    return user

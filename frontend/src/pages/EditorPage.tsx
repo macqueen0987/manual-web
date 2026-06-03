@@ -1,22 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import MDEditor from '@uiw/react-md-editor'
-import {
-  ExternalLink,
-  FileUp,
-  ImagePlus,
-  Loader2,
-  Save,
-  Settings2,
-  Trash2,
-  Video,
-} from 'lucide-react'
+import { Settings2, Trash2 } from 'lucide-react'
+import EditorToolbar from '../components/editor/EditorToolbar'
+import MarkdownEditorPane from '../components/editor/MarkdownEditorPane'
+import WysiwygEditorPane, { type WysiwygEditorHandle } from '../components/editor/WysiwygEditorPane'
+import { useEditorMode, type EditorMode } from '../hooks/useEditorMode'
 import client from '../api/client'
 import AdminLayout from '../components/admin/AdminLayout'
 import DocTreeNav, { type DocNode } from '../components/admin/DocTreeNav'
-import Modal from '../components/admin/Modal'
-import Toast, { type ToastMessage } from '../components/admin/Toast'
+import AdminDialog from '../components/admin/AdminDialog'
+import { notify } from '@/lib/notify'
 import { useAuthStore } from '../stores/authStore'
+import { useLocaleStore } from '../stores/localeStore'
+import { useEnsureUser } from '../components/auth/useEnsureUser'
 import {
   focusTextareaAt,
   getEditorTextarea,
@@ -30,8 +26,12 @@ import {
   markdownForVideoEmbed,
   uploadKindFromFilename,
 } from '../utils/mediaMarkdown'
-import type { Locale } from '../i18n'
-import { SUPPORTED_LOCALES } from '../i18n'
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES, translate, type Locale } from '../i18n'
+import {
+  isSecondaryContentLocale,
+  localeDisplayLabel,
+  localeToApiParam,
+} from '../utils/contentLocale'
 
 interface Product {
   id: number
@@ -44,15 +44,15 @@ interface Version {
   name: string
   slug: string
   is_latest: boolean
+  is_published: boolean
 }
 
 export default function EditorPage() {
   const { productSlug, versionSlug, docId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { logout } = useAuthStore()
-
-  const [user, setUser] = useState<{ email: string } | null>(null)
+  const { logout, user } = useAuthStore()
+  useEnsureUser()
   const [products, setProducts] = useState<Product[]>([])
   const [versions, setVersions] = useState<Version[]>([])
   const [docTree, setDocTree] = useState<DocNode[]>([])
@@ -72,24 +72,49 @@ export default function EditorPage() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [toast, setToast] = useState<ToastMessage | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [editLocale, setEditLocale] = useState<Locale>('en')
+  const uiLocale = useLocaleStore((s) => s.locale)
+  const [editLocale, setEditLocale] = useState<Locale>(uiLocale)
   const [localeAvailable, setLocaleAvailable] = useState(true)
 
+  const { mode: editorMode, requestModeChange } = useEditorMode()
   const imageInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editorWrapRef = useRef<HTMLDivElement>(null)
+  const wysiwygEditorRef = useRef<WysiwygEditorHandle | null>(null)
   const contentRef = useRef(content)
   contentRef.current = content
 
-  const product = products.find((p) => p.slug === selectedProduct)
-  const version = versions.find((v) => v.slug === selectedVersion)
-  const isLatest = version?.is_latest ?? selectedVersion === 'latest'
+  const getContentSnapshot = useCallback(() => {
+    if (editorMode === 'wysiwyg' && wysiwygEditorRef.current) {
+      return wysiwygEditorRef.current.getMarkdown()
+    }
+    return contentRef.current
+  }, [editorMode])
 
-  const notify = (text: string, variant: 'success' | 'error' = 'success') => {
-    setToast({ text, variant })
-  }
+  const handleEditorModeChange = useCallback(
+    (next: EditorMode) => {
+      const ok = requestModeChange(
+        next,
+        dirty,
+        translate(uiLocale, 'admin.editorModeSwitchDirty'),
+      )
+      if (!ok) return
+      if (editorMode === 'wysiwyg' && wysiwygEditorRef.current) {
+        const md = wysiwygEditorRef.current.getMarkdown()
+        setContent(md)
+        contentRef.current = md
+      }
+    },
+    [dirty, editorMode, requestModeChange, uiLocale],
+  )
+
+  const product = products.find((p) => p.slug === selectedProduct)
+  const version =
+    selectedVersion === 'latest'
+      ? versions.find((v) => v.is_latest)
+      : versions.find((v) => v.slug === selectedVersion)
+  const canEdit = true
 
   const flattenTree = (nodes: DocNode[]): DocNode[] => {
     const result: DocNode[] = []
@@ -143,7 +168,6 @@ export default function EditorPage() {
   }, [selectedProduct, selectedVersion, editLocale])
 
   useEffect(() => {
-    client.get('/auth/me').then((res) => setUser(res.data)).catch(() => {})
     client.get('/products').then((res) => {
       setProducts(res.data)
       if (!selectedProduct && res.data.length > 0) {
@@ -203,7 +227,8 @@ export default function EditorPage() {
       )
       .then((res) => {
         setSelectedDocId(res.data.id)
-        const hasTranslation = editLocale === 'en' || res.data.locale_available !== false
+        const hasTranslation =
+          !isSecondaryContentLocale(editLocale) || res.data.locale_available !== false
         setLocaleAvailable(hasTranslation)
         setContent(hasTranslation ? res.data.content : '')
         setTitle(hasTranslation ? res.data.title : '')
@@ -268,8 +293,18 @@ export default function EditorPage() {
   }
 
   const handleSave = useCallback(async () => {
-    if (isNewDoc && editLocale !== 'en') {
-      notify('새 페이지는 English 탭에서 먼저 만드세요', 'error')
+    const contentToSave = getContentSnapshot()
+    if (editorMode === 'wysiwyg') {
+      setContent(contentToSave)
+      contentRef.current = contentToSave
+    }
+    if (isNewDoc && isSecondaryContentLocale(editLocale)) {
+      notify(
+        translate(uiLocale, 'admin.editorCreateOnDefault', {
+          lang: localeDisplayLabel(DEFAULT_LOCALE, uiLocale),
+        }),
+        'error',
+      )
       return
     }
     if (isNewDoc) {
@@ -283,9 +318,9 @@ export default function EditorPage() {
         const res = await client.post('/documents', {
           version_id: version.id,
           title,
-          content,
+          content: contentToSave,
           parent_id: parentId === '' ? null : parentId,
-          locale: editLocale === 'en' ? undefined : editLocale,
+          locale: localeToApiParam(editLocale),
         })
         setIsNewDoc(false)
         setSelectedDocId(res.data.id)
@@ -307,13 +342,19 @@ export default function EditorPage() {
     setSaving(true)
     try {
       await client.put(`/documents/${selectedDocId}`, {
-        content,
+        content: contentToSave,
         title,
-        locale: editLocale === 'en' ? undefined : editLocale,
+        locale: localeToApiParam(editLocale),
       })
       setLocaleAvailable(true)
       setDirty(false)
-      notify(editLocale === 'ko' ? '한국어 번역을 저장했습니다' : '저장했습니다')
+      notify(
+        isSecondaryContentLocale(editLocale)
+          ? translate(uiLocale, 'admin.editorSavedTranslation', {
+              lang: localeDisplayLabel(editLocale, uiLocale),
+            })
+          : translate(uiLocale, 'admin.editorSaved'),
+      )
       await reloadDocs()
     } catch (err: unknown) {
       const detail =
@@ -325,7 +366,8 @@ export default function EditorPage() {
   }, [
     isNewDoc,
     title,
-    content,
+    getContentSnapshot,
+    editorMode,
     parentId,
     version,
     selectedDocId,
@@ -334,6 +376,7 @@ export default function EditorPage() {
     selectedVersion,
     reloadDocs,
     editLocale,
+    uiLocale,
   ])
 
   const handleDelete = async () => {
@@ -377,6 +420,11 @@ export default function EditorPage() {
 
   const insertSnippet = useCallback(
     (snippet: string, range?: { start: number; end: number }) => {
+      if (editorMode === 'wysiwyg' && wysiwygEditorRef.current) {
+        wysiwygEditorRef.current.insertText(snippet)
+        setDirty(true)
+        return
+      }
       const textarea = editorWrapRef.current
         ? getEditorTextarea(editorWrapRef.current)
         : null
@@ -403,7 +451,7 @@ export default function EditorPage() {
       setContent((prev) => `${prev}${snippet}`)
       setDirty(true)
     },
-    [],
+    [editorMode],
   )
 
   const handleMediaUpload = useCallback(
@@ -448,6 +496,7 @@ export default function EditorPage() {
   }
 
   useEffect(() => {
+    if (editorMode !== 'markdown') return
     const onPaste = (e: ClipboardEvent) => {
       const el = editorWrapRef.current
       if (!el) return
@@ -491,7 +540,7 @@ export default function EditorPage() {
 
     document.addEventListener('paste', onPaste, true)
     return () => document.removeEventListener('paste', onPaste, true)
-  }, [handleMediaUpload])
+  }, [handleMediaUpload, editorMode])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -517,8 +566,7 @@ export default function EditorPage() {
     setIsNewDoc(false)
   }
 
-  const editorHeight =
-    typeof window !== 'undefined' ? Math.max(400, window.innerHeight - 148) : 600
+  const editorPaneKey = `${selectedDocId ?? 'new'}-${editLocale}-${editorMode}`
 
   const editorBreadcrumbs = useMemo(() => {
     const items: { label: string; to?: string }[] = [{ label: '관리', to: '/admin' }]
@@ -577,98 +625,17 @@ export default function EditorPage() {
             {versions.map((v) => (
               <option key={v.id} value={v.slug}>
                 {v.name}
-                {v.is_latest ? ' (작업 중)' : ''}
+                {v.is_published ? ' (게시됨)' : ''}
               </option>
             ))}
           </select>
 
-          {!isLatest && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
-              읽기 전용 — latest에서 편집하세요
+          {version?.is_published && (
+            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-ink-muted">
+              게시됨 — 저장 시 공개 문서에 반영
             </span>
           )}
 
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) void handleMediaUpload(file)
-              e.target.value = ''
-            }}
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.zip,.mp4,application/pdf,application/zip,video/mp4"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) void handleMediaUpload(file)
-              e.target.value = ''
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => imageInputRef.current?.click()}
-            disabled={uploading || !isLatest}
-            className="admin-btn-secondary py-1.5"
-          >
-            {uploading ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <ImagePlus size={16} />
-            )}
-            이미지
-          </button>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || !isLatest}
-            className="admin-btn-secondary py-1.5"
-            title="PDF, ZIP, MP4"
-          >
-            <FileUp size={16} />
-            파일
-          </button>
-          <button
-            type="button"
-            onClick={handleVideoEmbed}
-            disabled={!isLatest}
-            className="admin-btn-secondary py-1.5"
-            title="YouTube / Vimeo embed"
-          >
-            <Video size={16} />
-            동영상
-          </button>
-          {selectedProduct && (
-            <a
-              href={`/${selectedProduct}/${selectedVersion}${selectedDocSlug ? `/${selectedDocSlug}` : ''}`}
-              target="_blank"
-              rel="noreferrer"
-              className="admin-btn-secondary py-1.5"
-              title="현재 페이지를 공개 문서에서 미리보기"
-            >
-              <ExternalLink size={16} />
-              미리보기
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={saving || (!isNewDoc && !selectedDocId) || !isLatest}
-            className="admin-btn-primary py-1.5"
-          >
-            {saving ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Save size={16} />
-            )}
-            {saving ? '저장 중…' : '저장'}
-            <span className="sr-only">(Ctrl+S)</span>
-          </button>
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -677,8 +644,8 @@ export default function EditorPage() {
           currentSlug={isNewDoc ? undefined : selectedDocSlug}
           onSelect={selectDoc}
           onNewPage={openNewPageModal}
-          onReposition={isLatest ? handleReposition : undefined}
-          dragEnabled={isLatest}
+          onReposition={canEdit ? handleReposition : undefined}
+          dragEnabled={canEdit}
         />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -709,12 +676,24 @@ export default function EditorPage() {
               </div>
             )}
 
-            {editLocale === 'ko' && selectedDocId && !localeAvailable && !dirty && (
-              <span className="text-xs text-amber-700">아직 한국어 번역 없음 — 새로 작성 후 저장</span>
-            )}
+            {isSecondaryContentLocale(editLocale) &&
+              selectedDocId &&
+              !localeAvailable &&
+              !dirty && (
+                <span className="text-xs text-amber-700">
+                  {translate(uiLocale, 'admin.editorNoTranslation', {
+                    lang: localeDisplayLabel(editLocale, uiLocale),
+                  })}
+                </span>
+              )}
 
-            {editLocale === 'ko' && selectedDocId && (
-              <span className="text-xs text-ink-faint">URL 경로는 English 페이지와 동일 · 제목만 한국어</span>
+            {isSecondaryContentLocale(editLocale) && selectedDocId && (
+              <span className="text-xs text-ink-faint">
+                {translate(uiLocale, 'admin.editorUrlPathHint', {
+                  base: localeDisplayLabel(DEFAULT_LOCALE, uiLocale),
+                  lang: localeDisplayLabel(editLocale, uiLocale),
+                })}
+              </span>
             )}
 
             {isNewDoc || !selectedDocId ? (
@@ -729,7 +708,7 @@ export default function EditorPage() {
                       setTitle(e.target.value)
                       setDirty(true)
                     }}
-                    disabled={!isLatest}
+                    disabled={!canEdit}
                   />
                 </div>
                 {isNewDoc && (
@@ -746,7 +725,7 @@ export default function EditorPage() {
                   setTitle(e.target.value)
                   setDirty(true)
                 }}
-                disabled={!isLatest}
+                disabled={!canEdit}
                 aria-label="페이지 제목"
               />
             )}
@@ -777,7 +756,7 @@ export default function EditorPage() {
                       onChange={(e) =>
                         setParentId(e.target.value === '' ? '' : Number(e.target.value))
                       }
-                      disabled={!isLatest}
+                      disabled={!canEdit}
                     >
                       <option value="">(최상위)</option>
                       {flatDocs
@@ -793,7 +772,7 @@ export default function EditorPage() {
                         type="button"
                         onClick={() => void handleMoveParent()}
                         className="admin-btn-secondary flex-1 py-1.5 text-xs"
-                        disabled={!isLatest}
+                        disabled={!canEdit}
                       >
                         적용
                       </button>
@@ -801,7 +780,7 @@ export default function EditorPage() {
                         type="button"
                         onClick={() => void handleDelete()}
                         className="admin-btn-danger flex-1 py-1.5 text-xs"
-                        disabled={!isLatest}
+                        disabled={!canEdit}
                       >
                         <Trash2 size={14} />
                         삭제
@@ -814,9 +793,9 @@ export default function EditorPage() {
           </div>
 
           {/* Editor area */}
-          <div className="flex-1 overflow-hidden bg-surface-muted/30 p-4">
+          <div className="flex flex-1 flex-col overflow-hidden bg-surface-muted/30">
             {!isNewDoc && !selectedDocSlug ? (
-              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-stone-300 bg-white p-12 text-center">
+              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-stone-300 bg-white p-12 text-center m-4">
                 <p className="text-lg font-medium text-ink">편집할 페이지를 선택하세요</p>
                 <p className="mt-2 max-w-sm text-sm text-ink-muted">
                   왼쪽 트리에서 페이지를 고르거나 새 페이지를 만드세요.
@@ -825,38 +804,104 @@ export default function EditorPage() {
                   type="button"
                   onClick={openNewPageModal}
                   className="admin-btn-primary mt-6"
-                  disabled={!isLatest}
+                  disabled={!canEdit}
                 >
                   새 페이지 만들기
                 </button>
               </div>
             ) : (
-              <div
-                ref={editorWrapRef}
-                className="h-full overflow-hidden rounded-xl border border-stone-200 bg-white shadow-card"
-                data-color-mode="light"
-              >
-                <MDEditor
-                  value={content}
-                  onChange={(val) => {
-                    setContent(val || '')
-                    setDirty(true)
-                  }}
-                  height={editorHeight}
-                  preview="live"
-                  enableScroll
-                  visibleDragbar={false}
-                  previewOptions={{
-                    className: 'doc-prose max-w-none',
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden m-4 rounded-xl border border-stone-200 bg-white shadow-card">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) void handleMediaUpload(file)
+                    e.target.value = ''
                   }}
                 />
+                <EditorToolbar
+                  uiLocale={uiLocale}
+                  editorMode={editorMode}
+                  onEditorModeChange={handleEditorModeChange}
+                  readOnly={!canEdit}
+                  saving={saving}
+                  dirty={dirty}
+                  canSave={canEdit && (isNewDoc || !!selectedDocId)}
+                  onSave={() => void handleSave()}
+                  onDelete={selectedDocId ? () => void handleDelete() : undefined}
+                  fileInputRef={fileInputRef}
+                  onFilePick={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) void handleMediaUpload(file)
+                    e.target.value = ''
+                  }}
+                  onImageUploadClick={() => imageInputRef.current?.click()}
+                  onVideoEmbed={handleVideoEmbed}
+                  uploading={uploading}
+                  onOpenPublic={
+                    selectedProduct
+                      ? () =>
+                          window.open(
+                            `/${selectedProduct}/${selectedVersion}${selectedDocSlug ? `/${selectedDocSlug}` : ''}`,
+                            '_blank',
+                          )
+                      : undefined
+                  }
+                />
+                <div className="min-h-0 flex-1 overflow-auto p-2" data-color-mode="light">
+                  {editorMode === 'markdown' ? (
+                    <MarkdownEditorPane
+                      wrapRef={editorWrapRef}
+                      value={content}
+                      onChange={(val) => {
+                        setContent(val)
+                        setDirty(true)
+                      }}
+                      readOnly={!canEdit}
+                    />
+                  ) : (
+                    <WysiwygEditorPane
+                      editorKey={editorPaneKey}
+                      initialMarkdown={content}
+                      readOnly={!canEdit}
+                      onChange={() => setDirty(true)}
+                      onUploadImage={(file, callback) => {
+                        void (async () => {
+                          setUploading(true)
+                          try {
+                            const formData = new FormData()
+                            formData.append('file', file)
+                            const res = await client.post('/upload', formData, {
+                              params: {
+                                product_slug: selectedProduct,
+                                version_slug: selectedVersion,
+                              },
+                              headers: { 'Content-Type': 'multipart/form-data' },
+                            })
+                            callback(res.data.url as string)
+                            setDirty(true)
+                            notify('이미지를 삽입했습니다')
+                          } catch {
+                            notify('업로드에 실패했습니다', 'error')
+                          } finally {
+                            setUploading(false)
+                          }
+                        })()
+                      }}
+                      editorRef={wysiwygEditorRef}
+                    />
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <Modal
+      <AdminDialog
         open={newPageModalOpen}
         title="새 페이지"
         onClose={() => setNewPageModalOpen(false)}
@@ -873,7 +918,7 @@ export default function EditorPage() {
               type="button"
               className="admin-btn-primary"
               onClick={() => startNewDoc(newPageParentId)}
-              disabled={!isLatest}
+              disabled={!canEdit}
             >
               만들기
             </button>
@@ -900,9 +945,7 @@ export default function EditorPage() {
             </option>
           ))}
         </select>
-      </Modal>
-
-      <Toast toast={toast} onDismiss={() => setToast(null)} />
+      </AdminDialog>
     </AdminLayout>
   )
 }

@@ -1,13 +1,14 @@
 import logging
 import re
 
-from sqlalchemy import or_, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.session import engine
 from app.models.document import Document
 from app.models.product import Product
 from app.models.version import Version
+from app.core.product_visibility import ADMIN_ONLY_CATEGORY
 from app.services.document_service import read_document_content
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS document_fts USING fts5(
 )
 """
 
-VISIBLE_VERSION_FILTER = or_(Version.is_published == True, Version.is_latest == True)
+PUBLIC_VERSION_FILTER = Version.is_published == True
 
 
 def ensure_fts() -> None:
@@ -35,7 +36,11 @@ def _visible_documents_query(db: Session):
         db.query(Document)
         .join(Version, Document.version_id == Version.id)
         .join(Product, Version.product_id == Product.id)
-        .filter(VISIBLE_VERSION_FILTER)
+        .filter(PUBLIC_VERSION_FILTER)
+        .filter(
+            (Product.category.is_(None))
+            | (Product.category != ADMIN_ONLY_CATEGORY)
+        )
     )
 
 
@@ -79,7 +84,13 @@ def sync_document(db: Session, doc_id: int) -> None:
         if not doc:
             return
         version = doc.version
-        if not version or (not version.is_published and not version.is_latest):
+        product = version.product if version else None
+        if (
+            not version
+            or not version.is_published
+            or not product
+            or (product.category or "").strip() == ADMIN_ONLY_CATEGORY
+        ):
             return
         content = read_document_content(doc)
         conn.execute(
@@ -129,8 +140,10 @@ def search_documents(db: Session, q: str, product_slug: str | None = None) -> li
         JOIN versions v ON v.id = document_fts.version_id
         JOIN products p ON p.id = document_fts.product_id
         WHERE document_fts MATCH :fts_q
+          AND v.is_published = 1
+          AND (trim(p.category) IS NULL OR trim(p.category) != :admin_only_category)
     """
-    params: dict = {"fts_q": fts_q}
+    params: dict = {"fts_q": fts_q, "admin_only_category": ADMIN_ONLY_CATEGORY}
     if product_slug:
         sql += " AND p.slug = :product_slug"
         params["product_slug"] = product_slug

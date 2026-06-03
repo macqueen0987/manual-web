@@ -13,6 +13,7 @@ class Product(Base):
     name = Column(String(255), nullable=False)
     slug = Column(String(255), unique=True, index=True, nullable=False)
     description = Column(Text, nullable=True)
+    category = Column(String(128), nullable=True, index=True)
     sort_order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
-import { BookOpen, FolderOpen, Home, LogOut } from 'lucide-react'
+import { BookOpen, FolderOpen, LayoutTemplate } from 'lucide-react'
+import AccountMenu from '../auth/AccountMenu'
 import SiteHeader from '../layout/SiteHeader'
 import type { BreadcrumbItem } from '../layout/Breadcrumbs'
 import type { ReactNode } from 'react'
@@ -33,6 +34,12 @@ export default function AdminLayout({
       match: (p: string) => p === '/admin' || p.includes('/editor'),
     },
     {
+      to: '/admin/home',
+      label: translate(locale, 'admin.navHome'),
+      icon: LayoutTemplate,
+      match: (p: string) => p === '/admin/home',
+    },
+    {
       to: '/admin/media',
       label: translate(locale, 'admin.navMedia'),
       icon: FolderOpen,
@@ -60,17 +67,12 @@ export default function AdminLayout({
           </Link>
         )
       })}
-      {!isEditor && (
-        <Link
-          to="/"
-          className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
-        >
-          <Home size={16} />
-          <span className="hidden md:inline">{translate(locale, 'admin.navPublicDocs')}</span>
-        </Link>
-      )}
     </nav>
   )
+
+  const accountMenuLinks = isEditor
+    ? []
+    : [{ to: '/', label: translate(locale, 'admin.navPublicDocs') }]
 
   return (
     <div
@@ -82,25 +84,13 @@ export default function AdminLayout({
         breadcrumbs={breadcrumbs ?? [{ label: translate(locale, 'admin.breadcrumb') }]}
         nav={adminNav}
         actions={
-          <>
-            {userEmail && (
-              <span
-                className="hidden max-w-[10rem] truncate text-xs text-ink-faint lg:inline xl:max-w-[14rem]"
-                title={userEmail}
-              >
-                {userEmail}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={onLogout}
-              className="ui-btn-ghost py-1.5"
-              title={translate(locale, 'admin.logout')}
-            >
-              <LogOut size={16} />
-              <span className="hidden sm:inline">{translate(locale, 'admin.logout')}</span>
-            </button>
-          </>
+          userEmail ? (
+            <AccountMenu
+              label={userEmail}
+              onLogout={onLogout}
+              links={accountMenuLinks}
+            />
+          ) : null
         }
       />
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Menu, X, FileText } from 'lucide-react'
@@ -15,6 +15,8 @@ import { headingToId } from '../utils/markdown'
 import { docContentRehypePlugins } from '../utils/markdownSanitize'
 import { useDocLocale } from '../hooks/useDocLocale'
 import { translate, withLocalePath } from '../i18n'
+import { isSecondaryContentLocale, localeDisplayLabel } from '../utils/contentLocale'
+import { useAuthStore } from '../stores/authStore'
 
 function mdHeading(level: 1 | 2 | 3, className: string) {
   return ({ children }: { children?: ReactNode }) => {
@@ -96,26 +98,21 @@ interface Version {
   slug: string
   name: string
   is_latest: boolean
+  is_published: boolean
 }
 
-interface SearchHit {
-  id: number
-  title: string
-  slug: string
-  product_slug: string
-  product_name: string
-  version_slug: string
-  version_name: string
-  excerpt: string
+function versionRouteSlug(v: Version): string {
+  return v.is_latest ? 'latest' : v.slug
 }
 
 function resolveVersionAndDoc(
   versions: Version[],
+  defaultVersionSlug: string,
   versionSlugParam?: string,
   maybeSegment?: string,
   docSplat?: string,
 ): { versionSlug: string; docSlug: string } {
-  const versionSlugs = new Set(versions.map((v) => v.slug))
+  const versionSlugs = new Set(versions.map(versionRouteSlug))
 
   if (versionSlugParam !== undefined) {
     return {
@@ -128,10 +125,10 @@ function resolveVersionAndDoc(
     if (versionSlugs.has(maybeSegment)) {
       return { versionSlug: maybeSegment, docSlug: '' }
     }
-    return { versionSlug: 'latest', docSlug: maybeSegment }
+    return { versionSlug: defaultVersionSlug, docSlug: maybeSegment }
   }
 
-  return { versionSlug: 'latest', docSlug: '' }
+  return { versionSlug: defaultVersionSlug, docSlug: '' }
 }
 
 function contentHasH1(markdown: string): boolean {
@@ -153,6 +150,16 @@ function findDocPath(nodes: DocNode[], slug: string, trail: DocNode[] = []): Doc
 
 export default function ProductPage() {
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const hasSession = useAuthStore((s) => s.hasSession)
+  const sessionReady = useAuthStore((s) => s.sessionReady)
+  const fetchUserProfile = useAuthStore((s) => s.fetchUserProfile)
+  const isAdmin = user?.is_superuser ?? false
+
+  useEffect(() => {
+    if (!sessionReady || !hasSession || user) return
+    void fetchUserProfile()
+  }, [sessionReady, hasSession, user, fetchUserProfile])
   const { locale, setDocLocale } = useDocLocale()
   const { productSlug, versionSlug, maybeDocOrVersion, '*': docSplat } = useParams<{
     productSlug: string
@@ -166,18 +173,38 @@ export default function ProductPage() {
   const [document, setDocument] = useState<DocumentData | null>(null)
   const [loading, setLoading] = useState(true)
   const [versions, setVersions] = useState<Version[]>([])
+  const [versionsReady, setVersionsReady] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<SearchHit[]>([])
-  const [searchOpen, setSearchOpen] = useState(false)
+  const defaultVersionSlug = useMemo(() => {
+    if (versions.length === 0) return 'latest'
+    if (isAdmin) {
+      const latest = versions.find((v) => v.is_latest)
+      if (latest) return 'latest'
+    }
+    const first = versions[0]
+    return first.is_latest ? 'latest' : first.slug
+  }, [versions, isAdmin])
 
   const { versionSlug: effectiveVersion, docSlug } = useMemo(
-    () => resolveVersionAndDoc(versions, versionSlug, maybeDocOrVersion, docSplat),
-    [versions, versionSlug, maybeDocOrVersion, docSplat],
+    () =>
+      resolveVersionAndDoc(
+        versions,
+        defaultVersionSlug,
+        versionSlug,
+        maybeDocOrVersion,
+        docSplat,
+      ),
+    [versions, defaultVersionSlug, versionSlug, maybeDocOrVersion, docSplat],
+  )
+
+  const allowedVersionSlugs = useMemo(
+    () => new Set(versions.map(versionRouteSlug)),
+    [versions],
   )
 
   useEffect(() => {
     if (!productSlug) return
+    setVersionsReady(false)
     client
       .get(`/products/${productSlug}`)
       .then((res) => setProduct(res.data))
@@ -186,12 +213,36 @@ export default function ProductPage() {
       .get(`/products/${productSlug}/versions`)
       .then((res) => setVersions(res.data))
       .catch(() => setVersions([]))
-  }, [productSlug])
-
-  const needsVersionList = effectiveVersion === 'latest' && versions.length === 0
+      .finally(() => setVersionsReady(true))
+  }, [productSlug, isAdmin])
 
   useEffect(() => {
-    if (!productSlug || needsVersionList) return
+    if (!productSlug || versions.length === 0) return
+    if (!allowedVersionSlugs.has(effectiveVersion)) {
+      const docPart = docSlug ? `/${docSlug}` : ''
+      navigate(
+        withLocalePath(`/${productSlug}/${defaultVersionSlug}${docPart}`, locale),
+        { replace: true },
+      )
+    }
+  }, [
+    productSlug,
+    versions.length,
+    allowedVersionSlugs,
+    effectiveVersion,
+    docSlug,
+    defaultVersionSlug,
+    locale,
+    navigate,
+  ])
+
+  useEffect(() => {
+    if (!productSlug || !versionsReady) return
+    if (versions.length === 0) {
+      setDocs([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     client
       .get(`/products/${productSlug}/versions/${effectiveVersion}/documents`, {
@@ -200,7 +251,7 @@ export default function ProductPage() {
       .then((res) => setDocs(res.data))
       .catch(() => setDocs([]))
       .finally(() => setLoading(false))
-  }, [productSlug, effectiveVersion, needsVersionList, locale])
+  }, [productSlug, effectiveVersion, versionsReady, versions.length, locale])
 
   const activeDocSlug = docSlug || (docs.length > 0 && !docSlug ? 'index' : '')
 
@@ -216,20 +267,6 @@ export default function ProductPage() {
       .then((res) => setDocument(res.data))
       .catch(() => setDocument(null))
   }, [productSlug, effectiveVersion, activeDocSlug, locale])
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return
-    try {
-      const res = await client.get('/search', {
-        params: { q: searchQuery, product: productSlug },
-      })
-      setSearchResults(res.data.results)
-      setSearchOpen(true)
-    } catch {
-      setSearchResults([])
-      setSearchOpen(true)
-    }
-  }
 
   const changeVersion = (newVersion: string) => {
     const docPart = activeDocSlug ? `/${activeDocSlug}` : ''
@@ -277,9 +314,6 @@ export default function ProductPage() {
         versions={versions}
         versionSlug={effectiveVersion}
         onVersionChange={changeVersion}
-        searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
-        onSearch={handleSearch}
         onLocaleChange={setDocLocale}
         leading={
           <button
@@ -338,55 +372,14 @@ export default function ProductPage() {
               <article className="w-full min-w-0 max-w-[42rem] xl:max-w-[48rem]">
                 <Breadcrumbs items={contentBreadcrumbs} className="mb-4 text-xs sm:text-sm" />
 
-                {document && locale !== 'en' && document.locale_available === false && (
+                {document &&
+                  isSecondaryContentLocale(locale) &&
+                  document.locale_available === false && (
                   <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    {locale === 'ko'
-                      ? '이 페이지의 한국어 번역이 없어 기본 문서를 표시합니다.'
-                      : 'No translation for this locale; showing default content.'}
+                    {translate(locale, 'docs.noTranslationShowingDefault', {
+                      lang: localeDisplayLabel(locale, locale),
+                    })}
                   </p>
-                )}
-
-                {searchOpen && (
-                  <section className="mb-8 rounded-lg border border-stone-200 bg-surface-muted/50 p-5">
-                    <div className="mb-4 flex items-center justify-between gap-2">
-                      <h2 className="font-display text-lg font-semibold text-ink">
-                        {translate(locale, 'docs.searchResults', { count: searchResults.length })}
-                      </h2>
-                      <button
-                        type="button"
-                        onClick={() => setSearchOpen(false)}
-                        className="ui-btn-ghost py-1 text-sm"
-                      >
-                        {translate(locale, 'common.close')}
-                      </button>
-                    </div>
-                    {searchResults.length === 0 ? (
-                      <p className="text-sm text-ink-muted">{translate(locale, 'docs.noResults')}</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {searchResults.map((r) => (
-                          <li key={r.id}>
-                            <Link
-                              to={withLocalePath(
-                                `/${r.product_slug}/${r.version_slug}/${r.slug}`,
-                                locale,
-                              )}
-                              className="block rounded-md border border-stone-100 bg-white p-4 transition-colors duration-150 hover:border-stone-200"
-                              onClick={() => setSearchOpen(false)}
-                            >
-                              <h3 className="font-medium text-accent">{r.title}</h3>
-                              <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-ink-muted">
-                                {r.excerpt}
-                              </p>
-                              <span className="mt-2 inline-block text-xs text-ink-faint">
-                                {r.product_name} / {r.version_name}
-                              </span>
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
                 )}
 
                 {document ? (

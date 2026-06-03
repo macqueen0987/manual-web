@@ -27,6 +27,10 @@ class VersionOut(VersionBase):
         from_attributes = True
 
 
+class VersionUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=255)
+
+
 class VersionPublish(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     slug: str = Field(..., min_length=1, max_length=255, pattern=r"^[a-zA-Z0-9._-]+$")

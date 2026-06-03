@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin_user
+from app.api.deps import get_current_admin_user, get_optional_admin_user
+from app.core.product_visibility import require_product_for_viewer
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.document import (
@@ -22,11 +23,13 @@ def list_documents(
     version_slug: str,
     locale: str | None = Query(None, description="Content locale for localized titles"),
     db: Session = Depends(get_db),
+    admin: User | None = Depends(get_optional_admin_user),
 ):
     product = product_service.get_product_by_slug(db, product_slug)
-    if not product:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-    version = version_service.get_version_by_slug(db, product.id, version_slug)
+    product = require_product_for_viewer(product, admin)
+    version = version_service.get_version_by_slug_for_viewer(
+        db, product.id, version_slug, include_unpublished=admin is not None
+    )
     if not version:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
 
@@ -42,11 +45,13 @@ def get_document(
     doc_slug: str,
     locale: str | None = Query(None, description="Content locale, e.g. ko, en"),
     db: Session = Depends(get_db),
+    admin: User | None = Depends(get_optional_admin_user),
 ):
     product = product_service.get_product_by_slug(db, product_slug)
-    if not product:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-    version = version_service.get_version_by_slug(db, product.id, version_slug)
+    product = require_product_for_viewer(product, admin)
+    version = version_service.get_version_by_slug_for_viewer(
+        db, product.id, version_slug, include_unpublished=admin is not None
+    )
     if not version:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
     doc = document_service.get_document_by_slug(db, version.id, doc_slug)
@@ -132,8 +137,13 @@ def delete_document(
     doc = document_service.get_document(db, document_id)
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    version = version_service.get_version(db, doc.version_id)
+    product = product_service.get_product(db, version.product_id)
+    version_slug = "latest" if version.is_latest else version.slug
     try:
-        document_service.delete_document(db, doc)
+        document_service.delete_document(
+            db, doc, product_slug=product.slug, version_slug=version_slug
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {"message": "Document deleted successfully"}

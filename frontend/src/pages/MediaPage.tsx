@@ -3,9 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Copy, Loader2, Trash2 } from 'lucide-react'
 import client from '../api/client'
 import AdminLayout from '../components/admin/AdminLayout'
-import Toast, { type ToastMessage } from '../components/admin/Toast'
+import { notify } from '@/lib/notify'
+import { Button } from '@/components/ui/button'
 import EmptyState from '../components/ui/EmptyState'
 import { useAuthStore } from '../stores/authStore'
+import { useEnsureUser } from '../components/auth/useEnsureUser'
 import { translate } from '../i18n'
 import { useLocaleStore } from '../stores/localeStore'
 
@@ -45,24 +47,24 @@ function formatBytes(n: number): string {
 export default function MediaPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { logout } = useAuthStore()
+  const { logout, user } = useAuthStore()
   const locale = useLocaleStore((s) => s.locale)
-
-  const [user, setUser] = useState<{ email: string } | null>(null)
+  useEnsureUser()
   const [products, setProducts] = useState<Product[]>([])
   const [versions, setVersions] = useState<Version[]>([])
   const [items, setItems] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState<ToastMessage | null>(null)
   const [orphansOnly, setOrphansOnly] = useState(false)
   const [cleaning, setCleaning] = useState(false)
 
-  const productSlug = searchParams.get('product') || ''
-  const versionSlug = searchParams.get('version') || 'latest'
+  const productSlug = searchParams.get('product') ?? ''
+  const versionSlug = searchParams.get('version') ?? ''
+  const showScopeColumns = !productSlug
 
-  const notify = (text: string, variant: 'success' | 'error' = 'success') => {
-    setToast({ text, variant })
-  }
+  const productNameBySlug = useCallback(
+    (slug: string) => products.find((p) => p.slug === slug)?.name ?? slug,
+    [products],
+  )
 
   const loadProducts = useCallback(async () => {
     const res = await client.get('/products')
@@ -80,17 +82,12 @@ export default function MediaPage() {
   }, [])
 
   const loadMedia = useCallback(async () => {
-    if (!productSlug) {
-      setItems([])
-      setLoading(false)
-      return
-    }
     setLoading(true)
     try {
       const res = await client.get('/media', {
         params: {
-          product_slug: productSlug,
-          version_slug: versionSlug,
+          ...(productSlug ? { product_slug: productSlug } : {}),
+          ...(versionSlug ? { version_slug: versionSlug } : {}),
           orphans_only: orphansOnly || undefined,
         },
       })
@@ -100,16 +97,11 @@ export default function MediaPage() {
     } finally {
       setLoading(false)
     }
-  }, [productSlug, versionSlug, orphansOnly])
+  }, [productSlug, versionSlug, orphansOnly, locale])
 
   useEffect(() => {
-    client.get('/auth/me').then((res) => setUser(res.data)).catch(() => {})
-    void loadProducts().then((prods) => {
-      if (!searchParams.get('product') && prods.length > 0) {
-        setSearchParams({ product: prods[0].slug, version: 'latest' }, { replace: true })
-      }
-    })
-  }, [loadProducts, searchParams, setSearchParams])
+    void loadProducts()
+  }, [loadProducts])
 
   useEffect(() => {
     void loadVersions(productSlug)
@@ -124,8 +116,19 @@ export default function MediaPage() {
     navigate('/login')
   }
 
-  const setFilter = (product: string, version: string) => {
-    setSearchParams({ product, version })
+  const setProductFilter = (product: string) => {
+    if (!product) {
+      setSearchParams({})
+      return
+    }
+    setSearchParams({ product, version: versionSlug || 'latest' })
+  }
+
+  const setVersionFilter = (version: string) => {
+    if (!productSlug) return
+    const next: Record<string, string> = { product: productSlug }
+    if (version) next.version = version
+    setSearchParams(next)
   }
 
   const handleDelete = async (item: MediaItem) => {
@@ -152,13 +155,25 @@ export default function MediaPage() {
   }
 
   const handleCleanupOrphans = async () => {
-    if (!productSlug) return
+    if (!productSlug) {
+      notify(translate(locale, 'admin.mediaCleanupNeedsProduct'), 'error')
+      return
+    }
+    const versionTargets = versionSlug
+      ? [versionSlug]
+      : versions.map((v) => v.slug)
+    if (versionTargets.length === 0) return
+
     setCleaning(true)
     try {
-      const res = await client.post('/media/cleanup-orphans', null, {
-        params: { product_slug: productSlug, version_slug: versionSlug },
-      })
-      notify(translate(locale, 'admin.orphansCleaned', { count: res.data.count }))
+      let total = 0
+      for (const vs of versionTargets) {
+        const res = await client.post('/media/cleanup-orphans', null, {
+          params: { product_slug: productSlug, version_slug: vs },
+        })
+        total += res.data.count as number
+      }
+      notify(translate(locale, 'admin.orphansCleaned', { count: total }))
       await loadMedia()
     } catch {
       notify(translate(locale, 'admin.cleanupFailed'), 'error')
@@ -181,10 +196,10 @@ export default function MediaPage() {
           <select
             className="ui-input w-auto min-w-[10rem]"
             value={productSlug}
-            onChange={(e) => setFilter(e.target.value, versionSlug)}
-            aria-label="제품"
+            onChange={(e) => setProductFilter(e.target.value)}
+            aria-label={translate(locale, 'admin.mediaProductColumn')}
           >
-            <option value="">제품 선택</option>
+            <option value="">{translate(locale, 'admin.mediaAllProducts')}</option>
             {products.map((p) => (
               <option key={p.id} value={p.slug}>
                 {p.name}
@@ -194,14 +209,15 @@ export default function MediaPage() {
           <select
             className="admin-input w-auto min-w-[8rem]"
             value={versionSlug}
-            onChange={(e) => setFilter(productSlug, e.target.value)}
-            aria-label="버전"
+            onChange={(e) => setVersionFilter(e.target.value)}
+            aria-label={translate(locale, 'admin.mediaVersionColumn')}
             disabled={!productSlug}
           >
+            <option value="">{translate(locale, 'admin.mediaAllVersions')}</option>
             {versions.map((v) => (
               <option key={v.id} value={v.slug}>
                 {v.name}
-                {v.is_latest ? ' (작업 중)' : ''}
+                {v.is_latest ? ` (${translate(locale, 'admin.latestBadge')})` : ''}
               </option>
             ))}
           </select>
@@ -211,34 +227,34 @@ export default function MediaPage() {
               className="rounded border-stone-300"
               checked={orphansOnly}
               onChange={(e) => setOrphansOnly(e.target.checked)}
-              disabled={!productSlug}
             />
             {translate(locale, 'admin.orphansOnly')}
           </label>
-          <button
+          <Button
             type="button"
-            className="admin-btn-secondary py-1.5 text-sm"
+            variant="outline"
+            size="sm"
             disabled={!productSlug || cleaning}
             onClick={() => void handleCleanupOrphans()}
           >
             {cleaning ? <Loader2 size={16} className="animate-spin" /> : null}
             {translate(locale, 'admin.cleanupOrphans')}
-          </button>
+          </Button>
         </div>
 
         {loading ? (
           <div className="flex justify-center py-16 text-ink-muted">
             <Loader2 className="animate-spin" size={28} />
           </div>
-        ) : !productSlug ? (
-          <EmptyState title="제품을 선택하세요" description="필터에서 제품을 고르면 업로드 파일이 표시됩니다." />
         ) : items.length === 0 ? (
           <EmptyState
             title={orphansOnly ? translate(locale, 'admin.noOrphans') : translate(locale, 'admin.noMedia')}
             description={
               orphansOnly
                 ? '모든 업로드 파일이 문서 본문에서 참조되고 있습니다.'
-                : '에디터에서 이미지·파일을 업로드하면 여기에 표시됩니다.'
+                : productSlug
+                  ? '에디터에서 이미지·파일을 업로드하면 여기에 표시됩니다.'
+                  : translate(locale, 'admin.mediaSelectProductHint')
             }
           />
         ) : (
@@ -247,6 +263,16 @@ export default function MediaPage() {
               <thead className="border-b border-stone-200 bg-surface-muted text-ink-muted">
                 <tr>
                   <th className="px-4 py-2 font-medium">미리보기</th>
+                  {showScopeColumns ? (
+                    <>
+                      <th className="px-4 py-2 font-medium">
+                        {translate(locale, 'admin.mediaProductColumn')}
+                      </th>
+                      <th className="px-4 py-2 font-medium">
+                        {translate(locale, 'admin.mediaVersionColumn')}
+                      </th>
+                    </>
+                  ) : null}
                   <th className="px-4 py-2 font-medium">이름</th>
                   <th className="px-4 py-2 font-medium">상태</th>
                   <th className="px-4 py-2 font-medium">종류</th>
@@ -268,6 +294,14 @@ export default function MediaPage() {
                         <span className="text-xs uppercase text-ink-faint">{item.kind}</span>
                       )}
                     </td>
+                    {showScopeColumns ? (
+                      <>
+                        <td className="px-4 py-2 text-ink-muted">
+                          {productNameBySlug(item.product_slug)}
+                        </td>
+                        <td className="px-4 py-2 text-ink-muted">{item.version_slug}</td>
+                      </>
+                    ) : null}
                     <td className="max-w-[14rem] truncate px-4 py-2" title={item.original_name || item.filename}>
                       {item.original_name || item.filename}
                     </td>
@@ -282,22 +316,24 @@ export default function MediaPage() {
                     <td className="px-4 py-2 text-ink-muted">{formatBytes(item.size)}</td>
                     <td className="px-4 py-2">
                       <div className="flex justify-end gap-1">
-                        <button
+                        <Button
                           type="button"
-                          className="admin-btn-secondary p-1.5"
+                          variant="outline"
+                          size="icon"
                           title="URL 복사"
                           onClick={() => void copyUrl(item.url)}
                         >
                           <Copy size={16} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="admin-btn-secondary p-1.5 text-red-600 hover:bg-red-50"
+                          variant="destructive"
+                          size="icon"
                           title="삭제"
                           onClick={() => void handleDelete(item)}
                         >
                           <Trash2 size={16} />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -307,7 +343,6 @@ export default function MediaPage() {
           </div>
         )}
       </div>
-      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </AdminLayout>
   )
 }

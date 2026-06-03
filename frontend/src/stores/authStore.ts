@@ -1,97 +1,141 @@
 import { create } from 'zustand'
-import axios from 'axios'
-import client from '../api/client'
-import { isAccessTokenExpired } from '../utils/jwt'
+import {
+  bootstrap as sessionBootstrap,
+  clearTokens,
+  initCrossTabSync,
+  loadTokens,
+  logoutOnServer,
+  saveTokens,
+  setSessionChangeHandler,
+  fetchUser as sessionFetchUser,
+  type SessionUser,
+} from '../auth/sessionService'
 
-interface User {
-  id: number
-  email: string
-  full_name: string | null
-  is_superuser: boolean
+export type User = SessionUser
+
+function mirrorFromTokens(): Pick<
+  AuthState,
+  'accessToken' | 'refreshToken' | 'hasSession'
+> {
+  const tokens = loadTokens()
+  if (!tokens) {
+    return { accessToken: null, refreshToken: null, hasSession: false }
+  }
+  return {
+    accessToken: tokens.access,
+    refreshToken: tokens.refresh,
+    hasSession: true,
+  }
 }
 
 interface AuthState {
   accessToken: string | null
   refreshToken: string | null
   user: User | null
-  isAuthenticated: boolean
-  setTokens: (access: string, refresh: string) => void
+  hasSession: boolean
+  sessionReady: boolean
+  loginWithTokens: (access: string, refresh: string) => void
   setUser: (user: User) => void
   logout: () => Promise<void>
-  validateSession: () => Promise<void>
+  bootstrap: (options?: { fetchUser?: boolean }) => Promise<void>
+  fetchUserProfile: () => Promise<void>
+  syncFromStorage: () => void
 }
 
-function clearStoredAuth(set: (partial: Partial<AuthState>) => void) {
-  localStorage.removeItem('access_token')
-  localStorage.removeItem('refresh_token')
-  set({
-    accessToken: null,
-    refreshToken: null,
-    user: null,
-    isAuthenticated: false,
-  })
-}
+let bootstrapGeneration = 0
 
-export const useAuthStore = create<AuthState>((set) => ({
-  accessToken: null,
-  refreshToken: null,
-  user: null,
-  isAuthenticated: false,
-  setTokens: (access, refresh) => {
-    localStorage.setItem('access_token', access)
-    localStorage.setItem('refresh_token', refresh)
-    set({ accessToken: access, refreshToken: refresh, isAuthenticated: true })
-  },
-  setUser: (user) => set({ user }),
-  logout: async () => {
-    const refresh = localStorage.getItem('refresh_token')
-    try {
-      if (refresh) {
-        await client.post('/auth/logout', { refresh_token: refresh })
-      } else {
-        await client.post('/auth/logout')
-      }
-    } catch {
-      /* clear local session even if server call fails */
-    }
-    clearStoredAuth(set)
-  },
-  validateSession: async () => {
-    const access = localStorage.getItem('access_token')
-    const refresh = localStorage.getItem('refresh_token')
-    if (!access || !refresh) {
-      clearStoredAuth(set)
+export const useAuthStore = create<AuthState>((set) => {
+  const applyMirror = (partial?: Partial<AuthState>) => {
+    set({ ...mirrorFromTokens(), ...partial })
+  }
+
+  setSessionChangeHandler((tokens) => {
+    if (!tokens) {
+      set({
+        accessToken: null,
+        refreshToken: null,
+        hasSession: false,
+        user: null,
+      })
       return
     }
+    set({
+      accessToken: tokens.access,
+      refreshToken: tokens.refresh,
+      hasSession: true,
+    })
+  })
 
-    let activeAccess = access
-    if (isAccessTokenExpired(access)) {
-      try {
-        const res = await axios.post('/api/auth/refresh', {
-          token: refresh,
-          refresh_token: refresh,
-        })
-        activeAccess = res.data.access_token
-        localStorage.setItem('access_token', activeAccess)
-        localStorage.setItem('refresh_token', res.data.refresh_token)
-      } catch {
-        clearStoredAuth(set)
-        return
-      }
-    }
-
-    try {
-      const res = await client.get('/auth/me', {
-        headers: { Authorization: `Bearer ${activeAccess}` },
-      })
+  initCrossTabSync((tokens) => {
+    if (!tokens) {
       set({
-        accessToken: activeAccess,
-        refreshToken: localStorage.getItem('refresh_token'),
-        user: res.data,
-        isAuthenticated: true,
+        accessToken: null,
+        refreshToken: null,
+        hasSession: false,
+        user: null,
       })
-    } catch {
-      clearStoredAuth(set)
+      return
     }
-  },
-}))
+    set({
+      accessToken: tokens.access,
+      refreshToken: tokens.refresh,
+      hasSession: true,
+    })
+  })
+
+  return {
+    ...mirrorFromTokens(),
+    user: null,
+    sessionReady: false,
+    loginWithTokens: (access, refresh) => {
+      saveTokens(access, refresh)
+      set({
+        accessToken: access,
+        refreshToken: refresh,
+        hasSession: true,
+        sessionReady: true,
+      })
+    },
+    setUser: (user) => set({ user }),
+    syncFromStorage: () => applyMirror(),
+    logout: async () => {
+      await logoutOnServer()
+      clearTokens()
+      set({
+        accessToken: null,
+        refreshToken: null,
+        user: null,
+        hasSession: false,
+        sessionReady: true,
+      })
+    },
+    fetchUserProfile: async () => {
+      const user = await sessionFetchUser()
+      if (user) {
+        applyMirror({ user })
+      }
+    },
+    bootstrap: async (options) => {
+      const generation = ++bootstrapGeneration
+      const isStale = () => generation !== bootstrapGeneration
+
+      try {
+        const result = await sessionBootstrap(options)
+        if (isStale()) return
+        set({
+          accessToken: result.tokens?.access ?? null,
+          refreshToken: result.tokens?.refresh ?? null,
+          hasSession: result.hasSession,
+          user: result.user,
+        })
+      } finally {
+        if (!isStale()) set({ sessionReady: true })
+      }
+    },
+  }
+})
+
+/** @deprecated Use hasSession */
+export function useHasSession(): boolean {
+  return useAuthStore((s) => s.hasSession)
+}

@@ -207,16 +207,19 @@ def upsert_document(
     docs_dir = Path(settings.DOCS_DIR) / product.slug / "latest"
     docs_dir.mkdir(parents=True, exist_ok=True)
 
+    from app.core.paths import localized_doc_path, normalize_base_doc_path
+    from app.services.document_service import DEFAULT_LOCALE
+
     if parent_id:
         parent = db.query(Document).filter(Document.id == parent_id).first()
-        file_path = Path(parent.file_path)
-        if not file_path.is_absolute():
-            file_path = Path(settings.DOCS_DIR) / file_path
-        file_path = file_path.parent / f"{slug}.md"
+        parent_base = normalize_base_doc_path(Path(settings.DOCS_DIR) / parent.file_path)
+        file_path = parent_base.parent / f"{slug}.md"
     else:
         file_path = docs_dir / f"{slug}.md"
 
-    file_path.write_text(content, encoding="utf-8")
+    write_path = localized_doc_path(file_path, DEFAULT_LOCALE)
+    write_path.parent.mkdir(parents=True, exist_ok=True)
+    write_path.write_text(content, encoding="utf-8")
     stored = to_stored_doc_path(file_path)
 
     doc = (
