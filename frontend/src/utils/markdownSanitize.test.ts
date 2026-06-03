@@ -57,8 +57,8 @@ describe('doc markdown render (GitHub-like)', () => {
     expect(html).toContain('ok')
   })
 
-  it('strips inline style', async () => {
-    const html = await renderDocHtml('<span style="color:red">x</span>')
+  it('strips disallowed inline styles', async () => {
+    const html = await renderDocHtml('<span style="background:red">x</span>')
     expect(html).not.toContain('style=')
     expect(html).toContain('x')
   })
