@@ -303,7 +303,8 @@ data/uploads/{product_slug}/{version_or_latest}/{uuid}.{ext}
 ```
 manual-web/
 ├── spec.md
-├── docker-compose.yml
+├── docker-compose.dev.yml
+├── docker-compose.prod.yml
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                 # FastAPI; OpenAPI 비활성; /uploads 정적 마운트
@@ -424,8 +425,8 @@ manual-web/
 - [x] 동영상/파일 첨부 (embed·업로드·공개 렌더링)
 - [x] 미디어 관리 페이지 (`GET/DELETE /api/media`, `/admin/media`)
 - [~] 에러 처리 (전역 ErrorBoundary; shadcn Sonner)
-- [x] Docker compose 개발 배포
-- [~] LAN prod 프로필 (`docker-compose.prod.yml`)
+- [x] Docker compose 개발·배포 분리 (`docker-compose.dev.yml`, `docker-compose.prod.yml`)
+- [x] LAN prod 스택 (`docker-compose.prod.yml`)
 - [~] shadcn/ui (Admin 1차)
 
 ### 테스트·품질 (로드맵 외)

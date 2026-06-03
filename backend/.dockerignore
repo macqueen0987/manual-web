@@ -28,7 +28,7 @@ htmlcov/
 
 # Docker
 Dockerfile
-docker-compose.yml
+docker-compose*.yml
 .dockerignore
 
 # Data (runtime only, mounted via volume)
