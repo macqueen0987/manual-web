@@ -45,6 +45,31 @@ def test_mcp_resolve_latest_version_id(mcp_client, db):
     assert isinstance(version_id, int)
 
 
+def test_mcp_list_documents_nested_children(mcp_client, db):
+    seed_admin_user(db)
+    seed_product_with_versions(db, slug="mcp-tree")
+    vid = mcp_client.resolve_version_id("mcp-tree", "latest")
+    parent = mcp_client.create_document(
+        version_id=vid,
+        title="Root",
+        slug="root-doc",
+        content="# Root\n",
+    )
+    mcp_client.create_document(
+        version_id=vid,
+        title="Nested",
+        slug="nested-doc",
+        content="# Nested\n",
+        parent_id=parent["id"],
+    )
+    tree = mcp_client.list_document_tree("mcp-tree", "latest")
+    assert len(tree) == 1
+    assert tree[0]["slug"] == "root-doc"
+    assert len(tree[0]["children"]) == 1
+    assert tree[0]["children"][0]["slug"] == "nested-doc"
+    assert tree[0]["children"][0]["parent_slug"] == "root-doc"
+
+
 def test_mcp_create_and_get_document(mcp_client, db):
     seed_admin_user(db)
     seed_product_with_versions(db, slug="mcp-doc")

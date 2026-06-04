@@ -6,6 +6,8 @@ import {
   categorySectionId,
   collectCategorySuggestions,
   filterPublicProducts,
+  homeCatalogProducts,
+  homeExploreGroups,
   groupProductsByCategory,
   isAdminOnlyCategory,
   isNamedCategoryGroup,
@@ -72,6 +74,30 @@ describe('filterPublicProducts', () => {
     ]
     expect(filterPublicProducts(products)).toHaveLength(1)
     expect(isPublicCatalogProduct(products[1]!)).toBe(false)
+  })
+})
+
+describe('homeCatalogProducts', () => {
+  it('includes admin-only for superuser', () => {
+    const products = [
+      product({ id: 1, category: 'Docs' }),
+      product({ id: 2, category: ADMIN_ONLY_CATEGORY, slug: 'internal' }),
+    ]
+    expect(homeCatalogProducts(products, false)).toHaveLength(1)
+    expect(homeCatalogProducts(products, true)).toHaveLength(2)
+  })
+})
+
+describe('homeExploreGroups', () => {
+  it('shows admin-only section for superuser only', () => {
+    const products = [
+      product({ id: 1, category: 'Docs' }),
+      product({ id: 2, category: ADMIN_ONLY_CATEGORY, slug: 'internal' }),
+    ]
+    const publicGroups = homeExploreGroups(products, false)
+    expect(publicGroups.some((g) => g.key === ADMIN_ONLY_CATEGORY)).toBe(false)
+    const adminGroups = homeExploreGroups(products, true)
+    expect(adminGroups.some((g) => g.key === ADMIN_ONLY_CATEGORY)).toBe(true)
   })
 })
 

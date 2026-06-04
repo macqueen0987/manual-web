@@ -11,6 +11,13 @@ describe('extractHeadings', () => {
       { level: 3, text: 'Sub', id: 'sub' },
     ])
   })
+
+  it('matches headingToId for inline markup', () => {
+    const items = extractHeadings('## Install **checklist**')
+    expect(items).toEqual([
+      { level: 2, text: 'Install checklist', id: 'install-checklist' },
+    ])
+  })
 })
 
 describe('TableOfContents', () => {

@@ -178,53 +178,79 @@ def get_document_by_slug(db: Session, version_id: int, slug: str):
     return db.query(Document).filter(Document.version_id == version_id, Document.slug == slug).first()
 
 
-def _sorted_children(doc: Document) -> list[Document]:
-    if not hasattr(doc, "children") or not doc.children:
-        return []
-    return sorted(doc.children, key=lambda d: (d.sort_order, d.id))
+def _document_tree_node(
+    doc: Document,
+    *,
+    children_by_parent: dict[int | None, list[Document]],
+    id_to_slug: dict[int, str],
+    locale: str | None,
+) -> dict:
+    child_docs = children_by_parent.get(doc.id, [])
+    parent_slug = id_to_slug.get(doc.parent_id) if doc.parent_id is not None else None
+    return {
+        "id": doc.id,
+        "version_id": doc.version_id,
+        "parent_id": doc.parent_id,
+        "parent_slug": parent_slug,
+        "title": document_display_title(doc, locale),
+        "slug": doc.slug,
+        "file_path": doc.file_path,
+        "sort_order": doc.sort_order,
+        "created_at": doc.created_at,
+        "updated_at": doc.updated_at,
+        "locale_available": content_locale_available(doc, locale),
+        "children": [
+            _document_tree_node(
+                child,
+                children_by_parent=children_by_parent,
+                id_to_slug=id_to_slug,
+                locale=locale,
+            )
+            for child in child_docs
+        ],
+    }
+
+
+def build_tree_for_version(db: Session, version_id: int, locale: str | None = None) -> list[dict]:
+    """Nested document tree from all rows in the version (parent_id), not ORM backref."""
+    all_docs = (
+        db.query(Document)
+        .filter(Document.version_id == version_id)
+        .order_by(Document.sort_order, Document.id)
+        .all()
+    )
+    children_by_parent: dict[int | None, list[Document]] = {}
+    for doc in all_docs:
+        children_by_parent.setdefault(doc.parent_id, []).append(doc)
+    id_to_slug = {doc.id: doc.slug for doc in all_docs}
+    roots = children_by_parent.get(None, [])
+    return [
+        _document_tree_node(
+            doc,
+            children_by_parent=children_by_parent,
+            id_to_slug=id_to_slug,
+            locale=locale,
+        )
+        for doc in roots
+    ]
 
 
 def build_tree(documents: list[Document], locale: str | None = None) -> list[dict]:
-    result: list[dict] = []
-    stack: list[tuple[Document, list[dict]]] = []
-
-    for doc in documents:
-        item = {
-            "id": doc.id,
-            "version_id": doc.version_id,
-            "parent_id": doc.parent_id,
-            "title": document_display_title(doc, locale),
-            "slug": doc.slug,
-            "file_path": doc.file_path,
-            "sort_order": doc.sort_order,
-            "created_at": doc.created_at,
-            "updated_at": doc.updated_at,
-            "locale_available": content_locale_available(doc, locale),
-            "children": [],
-        }
-        result.append(item)
-        stack.append((doc, item["children"]))
-
-    while stack:
-        parent_doc, children_list = stack.pop()
-        for child in _sorted_children(parent_doc):
-            child_item = {
-                "id": child.id,
-                "version_id": child.version_id,
-                "parent_id": child.parent_id,
-                "title": document_display_title(child, locale),
-                "slug": child.slug,
-                "file_path": child.file_path,
-                "sort_order": child.sort_order,
-                "created_at": child.created_at,
-                "updated_at": child.updated_at,
-                "locale_available": content_locale_available(child, locale),
-                "children": [],
-            }
-            children_list.append(child_item)
-            stack.append((child, child_item["children"]))
-
-    return result
+    """Legacy entry: roots only; prefer ``build_tree_for_version`` for full nesting."""
+    if not documents:
+        return []
+    version_id = documents[0].version_id
+    children_by_parent: dict[int | None, list[Document]] = {None: list(documents)}
+    id_to_slug = {doc.id: doc.slug for doc in documents}
+    return [
+        _document_tree_node(
+            doc,
+            children_by_parent=children_by_parent,
+            id_to_slug=id_to_slug,
+            locale=locale,
+        )
+        for doc in documents
+    ]
 
 
 def cleanup_orphan_uploads_for_version(

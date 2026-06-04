@@ -154,6 +154,26 @@
   font-weight: 700;
 }
 
+/* GFM task lists — checkbox only, no custom bullet */
+.doc-prose ul.contains-task-list > li::before,
+.doc-prose ul > li:has(> input[type="checkbox"])::before,
+.doc-prose li.task-list-item::before {
+  content: none;
+}
+
+.doc-prose ul.contains-task-list > li,
+.doc-prose ul > li:has(> input[type="checkbox"]),
+.doc-prose li.task-list-item {
+  padding-left: 0;
+  list-style: none;
+}
+
+.doc-prose ul.contains-task-list > li > input[type="checkbox"],
+.doc-prose ul > li > input[type="checkbox"] {
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
 .doc-prose ul ul {
   margin-top: 0.5em;
   margin-bottom: 0.5em;

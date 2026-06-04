@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { headingToId } from './markdown'
+import { headingTextFromMarkdown, headingToId } from './markdown'
 
 describe('headingToId', () => {
   it('lowercases and hyphenates headings', () => {
@@ -8,5 +8,12 @@ describe('headingToId', () => {
 
   it('strips punctuation', () => {
     expect(headingToId('Hello, World!')).toBe('hello-world')
+  })
+})
+
+describe('headingTextFromMarkdown', () => {
+  it('strips inline emphasis for slug alignment', () => {
+    expect(headingTextFromMarkdown('## Hello **World**')).toBe('Hello World')
+    expect(headingToId(headingTextFromMarkdown('## Hello **World**'))).toBe('hello-world')
   })
 })

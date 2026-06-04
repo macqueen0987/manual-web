@@ -123,7 +123,13 @@ def escape_fts_query(q: str) -> str:
     return " AND ".join(f'"{word.replace('"', '""')}"*' for word in words)
 
 
-def search_documents(db: Session, q: str, product_slug: str | None = None) -> list[dict]:
+def search_documents(
+    db: Session,
+    q: str,
+    product_slug: str | None = None,
+    *,
+    include_admin_only: bool = False,
+) -> list[dict]:
     ensure_fts()
     fts_q = escape_fts_query(q)
     sql = """
@@ -143,9 +149,11 @@ def search_documents(db: Session, q: str, product_slug: str | None = None) -> li
         WHERE document_fts MATCH :fts_q
           AND v.is_published = 1
           AND v.is_latest = 0
-          AND (trim(p.category) IS NULL OR trim(p.category) != :admin_only_category)
     """
     params: dict = {"fts_q": fts_q, "admin_only_category": ADMIN_ONLY_CATEGORY}
+    if not include_admin_only:
+        sql += """
+          AND (trim(p.category) IS NULL OR trim(p.category) != :admin_only_category)"""
     if product_slug:
         sql += " AND p.slug = :product_slug"
         params["product_slug"] = product_slug

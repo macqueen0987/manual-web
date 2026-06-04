@@ -14,29 +14,37 @@ import { useDocLocale } from '../hooks/useDocLocale'
 import { translate } from '../i18n'
 import type { HomeContent } from '../types/homeContent'
 import { normalizeHomeContent, visibleShowcaseSlots } from '../utils/showcaseSlots'
+import { useAuthStore } from '../stores/authStore'
 import {
-  filterPublicProducts,
+  homeCatalogProducts,
   type ProductWithCategory,
 } from '../utils/productCategories'
 
 export default function HomePage() {
   const { locale } = useDocLocale()
   const heroHtml = useHomeHero(locale)
+  const sessionReady = useAuthStore((s) => s.sessionReady)
+  const isSuperuser = useAuthStore((s) => s.user?.is_superuser === true)
   const [products, setProducts] = useState<ProductWithCategory[]>([])
   const [homeContent, setHomeContent] = useState<HomeContent | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!sessionReady) return
+    setLoading(true)
     Promise.all([client.get('/products'), client.get('/site/home')])
       .then(([productsRes, homeRes]) => {
         setProducts(productsRes.data)
         setHomeContent(normalizeHomeContent(homeRes.data))
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [sessionReady, isSuperuser])
 
   const localeContent = homeContent?.[locale]
-  const publicProducts = useMemo(() => filterPublicProducts(products), [products])
+  const catalogProducts = useMemo(
+    () => homeCatalogProducts(products, isSuperuser),
+    [products, isSuperuser],
+  )
   const showcaseSlots = useMemo(
     () => (localeContent ? visibleShowcaseSlots(localeContent.showcase_slots) : []),
     [localeContent],
@@ -63,7 +71,7 @@ export default function HomePage() {
       <HomeHeroSection locale={locale} customHtml={heroHtml} />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:py-12">
-        {publicProducts.length === 0 ? (
+        {catalogProducts.length === 0 ? (
           <EmptyState
             icon={<BookOpen size={40} strokeWidth={1.25} />}
             title={translate(locale, 'home.noProducts')}
@@ -75,14 +83,14 @@ export default function HomePage() {
               <div className="mb-10 lg:mb-12">
                 <CategoryShowcase
                   slots={showcaseSlots}
-                  products={publicProducts}
+                  products={catalogProducts}
                   locale={locale}
                 />
               </div>
             )}
 
             <ExploreProductDirectory
-              products={publicProducts}
+              products={catalogProducts}
               locale={locale}
               showCategoryOnCards={!showShowcase}
             />

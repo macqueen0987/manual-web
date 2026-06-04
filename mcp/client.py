@@ -157,21 +157,18 @@ class ManualWebClient:
         slug: str,
         content: str = "",
         parent_id: int | None = None,
-        sort_order: int = 0,
+        sort_order: int | None = None,
     ) -> dict:
-        return self._request(
-            "POST",
-            "/api/documents",
-            auth=True,
-            json={
-                "version_id": version_id,
-                "title": title,
-                "slug": slug,
-                "content": content,
-                "parent_id": parent_id,
-                "sort_order": sort_order,
-            },
-        )
+        payload: dict[str, Any] = {
+            "version_id": version_id,
+            "title": title,
+            "slug": slug,
+            "content": content,
+            "parent_id": parent_id,
+        }
+        if sort_order is not None:
+            payload["sort_order"] = sort_order
+        return self._request("POST", "/api/documents", auth=True, json=payload)
 
     def update_document(
         self,
@@ -205,7 +202,7 @@ class ManualWebClient:
         content: str,
         parent_slug: str | None = None,
         version_slug: str = "latest",
-        sort_order: int = 0,
+        sort_order: int | None = None,
     ) -> dict:
         version_id = self.resolve_version_id(product_slug, version_slug)
         parent_id = None
@@ -219,7 +216,6 @@ class ManualWebClient:
                     content=f"# {parent_slug.replace('-', ' ').title()}\n",
                     parent_slug=None,
                     version_slug=version_slug,
-                    sort_order=0,
                 )
             parent_id = parent["id"]
 

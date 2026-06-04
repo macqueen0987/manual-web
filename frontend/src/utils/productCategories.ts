@@ -61,6 +61,25 @@ export function filterPublicProducts<T extends ProductWithCategory>(products: T[
   return products.filter(isPublicCatalogProduct)
 }
 
+/** Home catalog: superusers see admin-only products from the API; others see public only. */
+export function homeCatalogProducts<T extends ProductWithCategory>(
+  products: T[],
+  isSuperuser: boolean,
+): T[] {
+  return isSuperuser ? products : filterPublicProducts(products)
+}
+
+/** Explore sections on home — includes 「미공개」 for superusers only. */
+export function homeExploreGroups<T extends ProductWithCategory>(
+  products: T[],
+  isSuperuser: boolean,
+) {
+  const catalog = homeCatalogProducts(products, isSuperuser)
+  const groups = groupProductsByCategory(catalog)
+  if (isSuperuser) return groups
+  return groups.filter((g) => g.key !== ADMIN_ONLY_CATEGORY)
+}
+
 export function isNamedCategoryGroup(group: CategoryGroup): boolean {
   return group.key !== UNCATEGORIZED_KEY && group.key !== ADMIN_ONLY_CATEGORY
 }

@@ -94,7 +94,7 @@ def create_document(
     content: str = "",
     parent_slug: str | None = None,
     version_slug: str = "latest",
-    sort_order: int = 0,
+    sort_order: int | None = None,
 ) -> str:
     """새 문서 생성(관리자 env 필요). slug가 이미 있으면 실패 — 덮어쓰기는 import 도구 사용.
 
@@ -307,6 +307,12 @@ def import_markdown_directory(
 
     results: list[dict] = []
     errors: list[dict] = []
+    sibling_order: dict[str | None, int] = {}
+
+    def next_sort_order(parent_key: str | None) -> int:
+        order = sibling_order.get(parent_key, 0)
+        sibling_order[parent_key] = order + 1
+        return order
 
     for path in md_files:
         rel = path.relative_to(root)
@@ -330,6 +336,7 @@ def import_markdown_directory(
             content, media_uploads = _prepare_markdown_content(
                 content, path.parent, product_slug, version_slug, upload_local_images=upload_local_images
             )
+            parent_key = parent if isinstance(parent, str) else parent_slug
             doc = client.upsert_document(
                 product_slug,
                 title=title,
@@ -337,6 +344,7 @@ def import_markdown_directory(
                 content=content,
                 parent_slug=parent,
                 version_slug=version_slug,
+                sort_order=next_sort_order(parent_key),
             )
             results.append(
                 {

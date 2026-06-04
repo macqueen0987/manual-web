@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import { docRemarkPlugins } from '../utils/markdownSanitize'
@@ -153,6 +153,7 @@ export default function ProductPage() {
   const [versions, setVersions] = useState<Version[]>([])
   const [versionsReady, setVersionsReady] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const mainScrollRef = useRef<HTMLDivElement>(null)
   const defaultVersionSlug = useMemo(() => {
     if (versions.length === 0) return 'latest'
     if (isAdmin) {
@@ -346,7 +347,7 @@ export default function ProductPage() {
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={mainScrollRef} className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex min-h-full flex-col">
               <div className="flex flex-1 flex-col">
                 <div className="flex justify-center px-4 py-6 sm:px-6 lg:py-10 xl:px-8">
@@ -429,8 +430,12 @@ export default function ProductPage() {
               </article>
 
               {document && (
-                <div className="hidden shrink-0 xl:block">
-                  <TableOfContents content={document.content} locale={locale} />
+                <div className="hidden shrink-0 self-stretch xl:block">
+                  <TableOfContents
+                    content={document.content}
+                    locale={locale}
+                    scrollContainerRef={mainScrollRef}
+                  />
                 </div>
               )}
                   </div>

@@ -14,6 +14,11 @@ vi.mock('../hooks/useHomeHero', () => ({
   useHomeHero: () => null,
 }))
 
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: (selector: (s: { sessionReady: boolean; user: null }) => unknown) =>
+    selector({ sessionReady: true, user: null }),
+}))
+
 vi.mock('../components/layout/PublicHeader', () => ({
   default: ({ center }: { center?: React.ReactNode }) => <header>{center}</header>,
 }))

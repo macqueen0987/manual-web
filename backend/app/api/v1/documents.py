@@ -33,8 +33,7 @@ def list_documents(
     if not version:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
 
-    docs = document_service.get_documents(db, version.id)
-    tree = document_service.build_tree(docs, locale=locale)
+    tree = document_service.build_tree_for_version(db, version.id, locale=locale)
     return tree
 
 
