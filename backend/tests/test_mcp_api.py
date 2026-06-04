@@ -88,6 +88,15 @@ def test_mcp_login_failure(mcp_http, monkeypatch):
         client.login()
 
 
+def test_mcp_retries_after_stale_token(mcp_client, db):
+    seed_admin_user(db)
+    seed_product_with_versions(db, slug="mcp-stale")
+    mcp_client.login()
+    mcp_client._token = "stale.jwt.after-secret-key-rotation"
+    tree = mcp_client.list_document_tree("mcp-stale", "latest")
+    assert isinstance(tree, list)
+
+
 MINI_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
     b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00"

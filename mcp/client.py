@@ -28,8 +28,8 @@ class ManualWebClient:
         self._http_client = http_client
 
     def login(self) -> None:
-        email = os.environ.get("MANUAL_WEB_EMAIL")
-        password = os.environ.get("MANUAL_WEB_PASSWORD")
+        email = os.environ.get("MANUAL_WEB_EMAIL") or os.environ.get("MCP_ADMIN_EMAIL")
+        password = os.environ.get("MANUAL_WEB_PASSWORD") or os.environ.get("MCP_ADMIN_PASSWORD")
         if not email or not password:
             raise ManualWebError(
                 "Set MANUAL_WEB_EMAIL and MANUAL_WEB_PASSWORD env vars for write operations."
@@ -44,6 +44,9 @@ class ManualWebClient:
             raise ManualWebError(f"Login failed ({res.status_code}): {res.text}")
         self._token = res.json()["access_token"]
 
+    def _clear_auth(self) -> None:
+        self._token = None
+
     def _headers(self, auth: bool) -> dict[str, str]:
         if not auth:
             return {}
@@ -51,13 +54,45 @@ class ManualWebClient:
             self.login()
         return {"Authorization": f"Bearer {self._token}"}
 
-    def _request(self, method: str, path: str, *, auth: bool = False, **kwargs: Any) -> Any:
+    def _should_retry_auth(self, res: httpx.Response, *, auth: bool) -> bool:
+        if not auth:
+            return False
+        if res.status_code in (401, 403):
+            return True
+        # Optional-admin routes treat invalid tokens as anonymous → 404 for unpublished "latest".
+        if res.status_code == 404 and "Version not found" in res.text:
+            return True
+        return False
+
+    def _http_request(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str],
+        timeout: float = 60,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        if self._http_client is not None:
+            return self._http_client.request(method, url, headers=headers, **kwargs)
+        return httpx.request(method, url, headers=headers, timeout=timeout, **kwargs)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        auth: bool = False,
+        _auth_retry: bool = False,
+        **kwargs: Any,
+    ) -> Any:
         url = f"{self.base_url}{path}"
         headers = self._headers(auth)
-        if self._http_client is not None:
-            res = self._http_client.request(method, url, headers=headers, **kwargs)
-        else:
-            res = httpx.request(method, url, headers=headers, timeout=60, **kwargs)
+        res = self._http_request(method, url, headers=headers, **kwargs)
+        if not _auth_retry and self._should_retry_auth(res, auth=auth):
+            self._clear_auth()
+            self.login()
+            return self._request(method, path, auth=auth, _auth_retry=True, **kwargs)
         if res.status_code >= 400:
             raise ManualWebError(f"{method} {path} → {res.status_code}: {res.text}")
         if res.status_code == 204 or not res.content:
@@ -213,13 +248,18 @@ class ManualWebClient:
         mime, _ = mimetypes.guess_type(path.name)
         url = f"{self.base_url}/api/upload"
         params = {"product_slug": product_slug, "version_slug": version_slug}
-        headers = self._headers(True)
-        with path.open("rb") as fh:
-            files = {"file": (path.name, fh, mime or "application/octet-stream")}
-            if self._http_client is not None:
-                res = self._http_client.post(url, headers=headers, params=params, files=files)
-            else:
-                res = httpx.post(url, headers=headers, params=params, files=files, timeout=120)
+
+        def _post_upload() -> httpx.Response:
+            headers = self._headers(True)
+            with path.open("rb") as fh:
+                files = {"file": (path.name, fh, mime or "application/octet-stream")}
+                return self._http_request("POST", url, headers=headers, params=params, files=files, timeout=120)
+
+        res = _post_upload()
+        if self._should_retry_auth(res, auth=True):
+            self._clear_auth()
+            self.login()
+            res = _post_upload()
         if res.status_code >= 400:
             raise ManualWebError(f"POST /api/upload → {res.status_code}: {res.text}")
         return res.json()

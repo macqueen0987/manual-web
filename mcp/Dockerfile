@@ -6,7 +6,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN chmod +x entrypoint.sh
+# Strip CRLF when the repo is checked out on Windows (avoids "no such file or directory").
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
 ENV MANUAL_WEB_API_URL=http://backend:8000 \
     MCP_HOST=0.0.0.0 \
