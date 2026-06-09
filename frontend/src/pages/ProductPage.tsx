@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import { docRemarkPlugins } from '../utils/markdownSanitize'
@@ -58,11 +58,41 @@ function mdCode({ className, children }: { className?: string; children?: ReactN
   return <code className={className}>{children}</code>
 }
 
+function mdImg({
+  src,
+  alt,
+  width,
+  height,
+  style,
+  className,
+}: {
+  src?: string
+  alt?: string
+  width?: string | number
+  height?: string | number
+  style?: CSSProperties
+  className?: string
+}) {
+  return (
+    <img
+      src={src}
+      alt={alt ?? ''}
+      width={width}
+      height={height}
+      style={style}
+      className={className}
+      loading="lazy"
+      decoding="async"
+    />
+  )
+}
+
 const markdownComponents = {
   h1: mdHeading(1, 'scroll-mt-20'),
   h2: mdHeading(2, 'scroll-mt-20'),
   h3: mdHeading(3, 'scroll-mt-20'),
   a: mdAnchor(),
+  img: mdImg,
   pre: mdPre,
   code: mdCode,
   div: ({ className, children }: { className?: string; children?: ReactNode }) => {

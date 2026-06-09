@@ -234,6 +234,22 @@
   border-radius: 0.5rem;
 }
 
+/* Images — centered by default; HTML width/height attributes or inline size styles */
+.doc-prose img {
+  display: block;
+  max-width: 100%;
+  margin: 1.25em auto;
+  border-radius: 0.375rem;
+}
+
+.doc-prose img:not([height]) {
+  height: auto;
+}
+
+.doc-prose p:has(> img:only-child) {
+  text-align: center;
+}
+
 /* GFM tables — always use full prose column width */
 .doc-prose table {
   width: 100%;

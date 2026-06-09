@@ -28,10 +28,23 @@ export const docSanitizeSchema = {
       'width',
       'height',
     ],
+    img: [
+      ...(defaultSchema.attributes?.img ?? []),
+      'alt',
+      'width',
+      'height',
+      'className',
+      'loading',
+      'title',
+      'style',
+    ],
     svg: ['viewBox', 'width', 'height', 'ariaHidden', 'className', 'fill'],
     path: ['d', 'fill'],
   },
 }
+
+const ALLOWED_IMG_STYLE =
+  /^(?:(?:width|max-width|height|max-height)\s*:\s*(?:\d+(?:\.\d+)?(?:px|%|rem|em|vw|vh)|auto)\s*;?\s*)+$/i
 
 const ALLOWED_INLINE_COLOR_STYLE =
   /^color\s*:\s*(#[0-9a-fA-F]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)|[a-z]{3,20})\s*;?$/i
@@ -43,6 +56,19 @@ function rehypeFilterSpanStyles(): (tree: Root) => void {
       const style = String(node.properties?.style ?? '').trim()
       if (!style) return
       if (!ALLOWED_INLINE_COLOR_STYLE.test(style)) {
+        delete node.properties.style
+      }
+    })
+  }
+}
+
+function rehypeFilterImgStyles(): (tree: Root) => void {
+  return (tree) => {
+    visit(tree, 'element', (node) => {
+      if (node.tagName !== 'img') return
+      const style = String(node.properties?.style ?? '').trim()
+      if (!style) return
+      if (!ALLOWED_IMG_STYLE.test(style)) {
         delete node.properties.style
       }
     })
@@ -71,6 +97,7 @@ export const docContentRehypePlugins: Pluggable[] = [
   rehypeRaw,
   [rehypeSanitize, docSanitizeSchema],
   rehypeFilterSpanStyles,
+  rehypeFilterImgStyles,
   rehypeFilterIframes,
   rehypeHighlight,
 ]

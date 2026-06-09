@@ -62,4 +62,26 @@ describe('doc markdown render (GitHub-like)', () => {
     expect(html).not.toContain('style=')
     expect(html).toContain('x')
   })
+
+  it('keeps img width and height HTML attributes', async () => {
+    const html = await renderDocHtml(
+      '<img src="/uploads/demo.png" alt="Diagram" width="320" height="180" />',
+    )
+    expect(html).toContain('src="/uploads/demo.png"')
+    expect(html).toContain('alt="Diagram"')
+    expect(html).toContain('width="320"')
+    expect(html).toContain('height="180"')
+  })
+
+  it('keeps safe img inline size styles and strips unsafe ones', async () => {
+    const allowed = await renderDocHtml(
+      '<img src="/a.png" alt="x" style="width: 240px; height: auto" />',
+    )
+    expect(allowed).toContain('style="width: 240px; height: auto"')
+
+    const blocked = await renderDocHtml(
+      '<img src="/a.png" alt="x" style="position:absolute" />',
+    )
+    expect(blocked).not.toContain('style=')
+  })
 })
