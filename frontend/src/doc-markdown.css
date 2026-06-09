@@ -234,7 +234,43 @@
   border-radius: 0.5rem;
 }
 
+/* GFM tables — always use full prose column width */
+.doc-prose table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: 1.25em 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.doc-prose :is(th, td) {
+  border: 1px solid #e7e5e4;
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.doc-prose th {
+  font-weight: 600;
+  background-color: #fafaf9;
+  color: #1c1917;
+}
+
+.doc-prose tbody tr:nth-child(even) {
+  background-color: #fafaf9;
+}
+
 /* wmde-markdown defaults (editor preview) — same specificity boost when both classes apply */
+.doc-prose.wmde-markdown table {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: table !important;
+}
+
 .doc-prose.wmde-markdown ul,
 .doc-prose.wmde-markdown ol {
   list-style: none !important;
