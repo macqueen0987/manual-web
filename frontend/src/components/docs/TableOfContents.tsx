@@ -54,10 +54,10 @@ export default function TableOfContents({
 
   return (
     <nav
-      className="w-52 shrink-0 xl:w-56"
+      className="sticky top-6 hidden w-52 shrink-0 self-start xl:block xl:w-56"
       aria-label={translate(locale, 'docs.onThisPage')}
     >
-      <div className="max-h-[calc(100vh-3.5rem)] overflow-y-auto py-8 pl-4 pr-2">
+      <div className="max-h-[calc(100vh-5rem)] overflow-y-auto py-2">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-faint">
           {translate(locale, 'docs.onThisPage')}
         </p>

@@ -348,11 +348,12 @@ export default function ProductPage() {
           />
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-1">
-          <div ref={mainScrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div ref={mainScrollRef} className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex min-h-full flex-col">
               <div className="flex flex-1 flex-col">
                 <div className="flex justify-center px-4 py-6 sm:px-6 lg:py-10 xl:px-8">
+                  <div className="flex w-full max-w-[72rem] items-start justify-center gap-10 xl:gap-14">
               <article className="w-full min-w-0 max-w-[42rem] xl:max-w-[48rem]">
                 <Breadcrumbs items={contentBreadcrumbs} className="mb-4 text-xs sm:text-sm" />
 
@@ -429,21 +430,20 @@ export default function ProductPage() {
                   />
                 )}
               </article>
+
+              {showTableOfContents && (
+                <TableOfContents
+                  content={document.content}
+                  locale={locale}
+                  scrollContainerRef={mainScrollRef}
+                />
+              )}
+                  </div>
                 </div>
               </div>
               <PublicSiteFooter locale={locale} contentMaxWidth="docs" />
             </div>
           </div>
-
-          {showTableOfContents && (
-            <aside className="hidden shrink-0 border-l border-stone-100 xl:block">
-              <TableOfContents
-                content={document.content}
-                locale={locale}
-                scrollContainerRef={mainScrollRef}
-              />
-            </aside>
-          )}
         </main>
       </div>
     </div>
