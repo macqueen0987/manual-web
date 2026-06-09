@@ -1,37 +1,39 @@
 /**
- * Shared markdown prose — doc reader (ProductPage) and MD editor live preview.
- * Apply class "doc-prose" on the markdown root (with or without wmde-markdown).
+ * Shared markdown prose surfaces:
+ * - Public reader (.doc-prose)
+ * - MD editor live preview (.doc-prose.wmde-markdown)
+ * - WYSIWYG editor body (.toastui-editor-contents)
  */
 
-.doc-prose {
+:is(.doc-prose, .toastui-editor-contents) {
   font-family: "Noto Sans KR", system-ui, sans-serif;
   color: #1c1917;
   line-height: 1.625;
   word-wrap: break-word;
 }
 
-.doc-prose :is(h1, h2, h3, h4) {
+:is(.doc-prose, .toastui-editor-contents) :is(h1, h2, h3, h4) {
   font-family: "Noto Sans KR", system-ui, sans-serif;
   letter-spacing: normal;
   font-weight: 600;
   color: #1c1917;
 }
 
-.doc-prose h1 {
+:is(.doc-prose, .toastui-editor-contents) h1 {
   font-size: 1.75rem;
   line-height: 1.375;
   margin-top: 0;
   margin-bottom: 0.75em;
 }
 
-.doc-prose h2 {
+:is(.doc-prose, .toastui-editor-contents) h2 {
   font-size: 1.25rem;
   line-height: 1.375;
   margin-top: 2.5rem;
   margin-bottom: 0.5em;
 }
 
-.doc-prose h3 {
+:is(.doc-prose, .toastui-editor-contents) h3 {
   font-size: 1.125rem;
   line-height: 1.375;
   margin-top: 2rem;
@@ -39,69 +41,69 @@
 }
 
 @media (min-width: 640px) {
-  .doc-prose h1 {
+  :is(.doc-prose, .toastui-editor-contents) h1 {
     font-size: 1.875rem;
   }
 
-  .doc-prose h2 {
+  :is(.doc-prose, .toastui-editor-contents) h2 {
     font-size: 1.5rem;
   }
 
-  .doc-prose h3 {
+  :is(.doc-prose, .toastui-editor-contents) h3 {
     font-size: 1.25rem;
   }
 }
 
-.doc-prose p {
+:is(.doc-prose, .toastui-editor-contents) p {
   margin-top: 0;
   margin-bottom: 1em;
 }
 
-.doc-prose a {
+:is(.doc-prose, .toastui-editor-contents) a {
   font-weight: 500;
   color: #0d9488;
   text-decoration: none;
   transition: color 0.2s;
 }
 
-.doc-prose a:hover {
+:is(.doc-prose, .toastui-editor-contents) a:hover {
   color: #0f766e;
   text-decoration: underline;
 }
 
-.doc-prose mark {
+:is(.doc-prose, .toastui-editor-contents) mark {
   background-color: #fff8c5;
   border-radius: 2px;
   padding: 0 0.15em;
 }
 
 /* HTML color tags in markdown (class or inline color on span) */
-.doc-prose .doc-color-red {
+:is(.doc-prose, .toastui-editor-contents) .doc-color-red {
   color: #dc2626;
 }
 
-.doc-prose .doc-color-blue {
+:is(.doc-prose, .toastui-editor-contents) .doc-color-blue {
   color: #2563eb;
 }
 
-.doc-prose .doc-color-green {
+:is(.doc-prose, .toastui-editor-contents) .doc-color-green {
   color: #059669;
 }
 
-.doc-prose .doc-color-muted {
+:is(.doc-prose, .toastui-editor-contents) .doc-color-muted {
   color: #78716c;
 }
 
-.doc-prose mark.doc-mark-amber {
+:is(.doc-prose, .toastui-editor-contents) mark.doc-mark-amber {
   background-color: #fde68a;
 }
 
-.doc-prose mark.doc-mark-sky {
+:is(.doc-prose, .toastui-editor-contents) mark.doc-mark-sky {
   background-color: #bae6fd;
 }
 
 /* Lists — preflight strips list-style; custom bullets/numbers */
-.doc-prose ol {
+:is(.doc-prose, .toastui-editor-contents) ol {
   counter-reset: doc-ol;
   list-style: none;
   margin-top: 1em;
@@ -109,7 +111,7 @@
   padding-left: 0;
 }
 
-.doc-prose ol > li {
+:is(.doc-prose, .toastui-editor-contents) ol > li {
   counter-increment: doc-ol;
   position: relative;
   padding-left: 1.75rem;
@@ -117,7 +119,7 @@
   margin-bottom: 0.375em;
 }
 
-.doc-prose ol > li::before {
+:is(.doc-prose, .toastui-editor-contents) ol > li::before {
   content: counter(doc-ol) ".";
   position: absolute;
   left: 0;
@@ -126,27 +128,27 @@
   color: #57534e;
 }
 
-.doc-prose ol ol {
+:is(.doc-prose, .toastui-editor-contents) ol ol {
   counter-reset: doc-ol;
   margin-top: 0.5em;
   margin-bottom: 0.5em;
 }
 
-.doc-prose ul {
+:is(.doc-prose, .toastui-editor-contents) ul {
   list-style: none;
   margin-top: 1em;
   margin-bottom: 1em;
   padding-left: 0;
 }
 
-.doc-prose ul > li {
+:is(.doc-prose, .toastui-editor-contents) ul > li {
   position: relative;
   padding-left: 1.25rem;
   margin-top: 0.375em;
   margin-bottom: 0.375em;
 }
 
-.doc-prose ul > li::before {
+:is(.doc-prose, .toastui-editor-contents) ul > li::before {
   content: "•";
   position: absolute;
   left: 0.125rem;
@@ -155,32 +157,32 @@
 }
 
 /* GFM task lists — checkbox only, no custom bullet */
-.doc-prose ul.contains-task-list > li::before,
-.doc-prose ul > li:has(> input[type="checkbox"])::before,
-.doc-prose li.task-list-item::before {
+:is(.doc-prose, .toastui-editor-contents) ul.contains-task-list > li::before,
+:is(.doc-prose, .toastui-editor-contents) ul > li:has(> input[type="checkbox"])::before,
+:is(.doc-prose, .toastui-editor-contents) li.task-list-item::before {
   content: none;
 }
 
-.doc-prose ul.contains-task-list > li,
-.doc-prose ul > li:has(> input[type="checkbox"]),
-.doc-prose li.task-list-item {
+:is(.doc-prose, .toastui-editor-contents) ul.contains-task-list > li,
+:is(.doc-prose, .toastui-editor-contents) ul > li:has(> input[type="checkbox"]),
+:is(.doc-prose, .toastui-editor-contents) li.task-list-item {
   padding-left: 0;
   list-style: none;
 }
 
-.doc-prose ul.contains-task-list > li > input[type="checkbox"],
-.doc-prose ul > li > input[type="checkbox"] {
+:is(.doc-prose, .toastui-editor-contents) ul.contains-task-list > li > input[type="checkbox"],
+:is(.doc-prose, .toastui-editor-contents) ul > li > input[type="checkbox"] {
   margin-right: 0.5rem;
   vertical-align: middle;
 }
 
-.doc-prose ul ul {
+:is(.doc-prose, .toastui-editor-contents) ul ul {
   margin-top: 0.5em;
   margin-bottom: 0.5em;
 }
 
 /* Inline code */
-.doc-prose :not(pre) > code {
+:is(.doc-prose, .toastui-editor-contents) :not(pre) > code {
   padding: 0.2em 0.4em;
   margin: 0;
   font-size: 85%;
@@ -191,8 +193,8 @@
 }
 
 /* Fenced code blocks */
-.doc-prose pre,
-.doc-prose pre.doc-code-block {
+:is(.doc-prose, .toastui-editor-contents) pre,
+:is(.doc-prose, .toastui-editor-contents) pre.doc-code-block {
   margin: 1em 0;
   padding: 0;
   overflow: auto;
@@ -201,9 +203,9 @@
   border-radius: 0;
 }
 
-.doc-prose pre > code,
-.doc-prose pre.doc-code-block > code,
-.doc-prose pre code.hljs {
+:is(.doc-prose, .toastui-editor-contents) pre > code,
+:is(.doc-prose, .toastui-editor-contents) pre.doc-code-block > code,
+:is(.doc-prose, .toastui-editor-contents) pre code.hljs {
   display: block;
   padding: 16px;
   margin: 0;
@@ -217,7 +219,7 @@
   color: #24292f;
 }
 
-.doc-prose .video-embed {
+:is(.doc-prose, .toastui-editor-contents) .video-embed {
   position: relative;
   width: 100%;
   max-width: 48rem;
@@ -225,7 +227,7 @@
   margin: 1em 0;
 }
 
-.doc-prose .video-embed iframe {
+:is(.doc-prose, .toastui-editor-contents) .video-embed iframe {
   position: absolute;
   inset: 0;
   height: 100%;
@@ -235,23 +237,23 @@
 }
 
 /* Images — centered by default; HTML width/height attributes or inline size styles */
-.doc-prose img {
+:is(.doc-prose, .toastui-editor-contents) img {
   display: block;
   max-width: 100%;
   margin: 1.25em auto;
   border-radius: 0.375rem;
 }
 
-.doc-prose img:not([height]) {
+:is(.doc-prose, .toastui-editor-contents) img:not([height]) {
   height: auto;
 }
 
-.doc-prose p:has(> img:only-child) {
+:is(.doc-prose, .toastui-editor-contents) p:has(> img:only-child) {
   text-align: center;
 }
 
 /* GFM tables — always use full prose column width */
-.doc-prose table {
+:is(.doc-prose, .toastui-editor-contents) table {
   width: 100%;
   max-width: 100%;
   table-layout: fixed;
@@ -261,7 +263,7 @@
   line-height: 1.5;
 }
 
-.doc-prose :is(th, td) {
+:is(.doc-prose, .toastui-editor-contents) :is(th, td) {
   border: 1px solid #e7e5e4;
   padding: 0.625rem 0.75rem;
   text-align: left;
@@ -270,13 +272,13 @@
   overflow-wrap: anywhere;
 }
 
-.doc-prose th {
+:is(.doc-prose, .toastui-editor-contents) th {
   font-weight: 600;
   background-color: #fafaf9;
   color: #1c1917;
 }
 
-.doc-prose tbody tr:nth-child(even) {
+:is(.doc-prose, .toastui-editor-contents) tbody tr:nth-child(even) {
   background-color: #fafaf9;
 }
 
@@ -301,4 +303,14 @@
 .doc-prose.wmde-markdown pre code.hljs {
   background-color: #f6f8fa !important;
   border: 1px solid #d0d7de !important;
+}
+
+/* Toast UI bundled styles — defer to shared doc prose rules above */
+.toastui-editor-contents table {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.toastui-editor-contents img {
+  max-width: 100%;
 }

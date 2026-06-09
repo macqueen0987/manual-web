@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Editor } from '@toast-ui/react-editor'
 import '@toast-ui/editor/dist/toastui-editor.css'
+import { docHtmlSanitizer } from '../../utils/docHtmlSanitizer'
 
 export interface WysiwygEditorHandle {
   getMarkdown: () => string
@@ -79,6 +80,7 @@ export default function WysiwygEditorPane({
         }}
         onChange={onChange}
         readOnly={readOnly}
+        customHTMLSanitizer={docHtmlSanitizer}
       />
     </div>
   )

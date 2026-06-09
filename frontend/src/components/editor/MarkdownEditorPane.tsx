@@ -1,5 +1,6 @@
 import MDEditor from '@uiw/react-md-editor'
 import type { RefObject } from 'react'
+import { getDocMarkdownPreviewOptions } from '../../utils/docMarkdownRender'
 
 interface MarkdownEditorPaneProps {
   wrapRef: RefObject<HTMLDivElement | null>
@@ -24,9 +25,7 @@ export default function MarkdownEditorPane({
         height={520}
         visibleDragbar={!readOnly}
         textareaProps={{ readOnly }}
-        previewOptions={{
-          className: 'doc-prose wmde-markdown max-w-none',
-        }}
+        previewOptions={getDocMarkdownPreviewOptions()}
       />
     </div>
   )
