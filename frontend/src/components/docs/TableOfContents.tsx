@@ -27,6 +27,8 @@ interface TableOfContentsProps {
 }
 
 const TOC_SCROLL_OFFSET_PX = 80
+/** UiPath docs–style compact rail: ~40% of viewport, internal scroll when long. */
+const TOC_MAX_HEIGHT = 'max-h-[40dvh]'
 
 function scrollToHeading(id: string, scrollContainer: HTMLElement | null | undefined) {
   const target = document.getElementById(id)
@@ -57,16 +59,18 @@ export default function TableOfContents({
       className="sticky top-6 hidden w-52 shrink-0 self-start xl:block xl:w-56"
       aria-label={translate(locale, 'docs.onThisPage')}
     >
-      <div className="max-h-[calc(100vh-5rem)] overflow-y-auto py-2">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-faint">
+      <div
+        className={`${TOC_MAX_HEIGHT} overflow-y-auto overscroll-contain py-2 pr-1`}
+      >
+        <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint">
           {translate(locale, 'docs.onThisPage')}
         </p>
-        <ul className="space-y-2 border-l border-stone-200 text-sm">
+        <ul className="space-y-0.5 border-l border-stone-200 text-[0.8125rem] leading-snug">
           {headings.map((h) => (
             <li key={`${h.id}-${h.text}`}>
               <a
                 href={`#${h.id}`}
-                style={{ paddingLeft: `${(h.level - 1) * 0.65 + 0.75}rem` }}
+                style={{ paddingLeft: `${(h.level - 1) * 0.5 + 0.65}rem` }}
                 className="block border-l-2 border-transparent py-0.5 text-ink-muted transition-colors hover:border-accent hover:text-accent"
                 onClick={(e) => {
                   e.preventDefault()

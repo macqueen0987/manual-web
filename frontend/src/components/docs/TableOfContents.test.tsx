@@ -32,6 +32,9 @@ describe('TableOfContents', () => {
     expect(screen.getByRole('navigation', { name: '목차' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Intro' })).toHaveAttribute('href', '#intro')
     expect(screen.getByRole('link', { name: 'Setup' })).toHaveAttribute('href', '#setup')
+    expect(screen.getByRole('navigation', { name: '목차' }).querySelector('div')).toHaveClass(
+      'max-h-[40dvh]',
+    )
   })
 
   it('returns null when no headings', () => {
